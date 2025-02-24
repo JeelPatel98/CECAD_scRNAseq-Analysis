@@ -1,0 +1,361 @@
+---
+title: "TO_preserve_previouscode"
+author: "Jeel Patel"
+date: "2025-02-24"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+---
+title: "PBMC_Run1_4plex"
+author: "Jeel Patel"
+date: "2025-02-21"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r load_libraries}
+# Install packages if not already installed
+if (!requireNamespace("Seurat", quietly = TRUE)) install.packages("Seurat")
+if (!requireNamespace("qs", quietly = TRUE)) install.packages("qs")
+if (!requireNamespace("dplyr", quietly = TRUE)) install.packages("dplyr")
+
+# Load libraries
+library(Seurat)
+library(qs)
+library(dplyr)
+
+```
+
+
+## Define Sample Paths
+
+```{r define_sample_paths}
+
+# Define paths to the filtered_feature_bc_matrix directories for Run1
+sample_paths <- list(
+  "S1_W1_R1" = "/tank2/jpatel/CR_count_results/Individual_Samples/4plex_subpool1_run1_CRC/S1_W1_R1_count/outs/filtered_feature_bc_matrix",
+  "S1_W1_R2" = "/tank2/jpatel/CR_count_results/Individual_Samples/4plex_subpool1_run1_CRC/S1_W1_R2_count/outs/filtered_feature_bc_matrix",
+  "S1_W1_R3" = "/tank2/jpatel/CR_count_results/Individual_Samples/4plex_subpool1_run1_CRC/S1_W1_R3_count/outs/filtered_feature_bc_matrix",
+  "S1_W1_R4" = "/tank2/jpatel/CR_count_results/Individual_Samples/4plex_subpool1_run1_CRC/S1_W1_R4_count/outs/filtered_feature_bc_matrix"
+)
+
+# Print the sample paths to confirm
+print(sample_paths)
+
+```
+
+```{r load_samples}
+# Define RUN flag (set to TRUE for first run, FALSE for subsequent runs)
+RUN <- FALSE
+
+# Specify the results directory
+results_dir <- "PBMC_Run1_4plex_results"
+
+# Ensure the results directory exists
+if (!dir.exists(results_dir)) {
+  dir.create(results_dir)
+}
+
+# Initialize list to store Seurat objects
+seurat_objects <- list()
+
+# Loop through sample paths
+for (sample_name in names(sample_paths)) {
+  
+  # Define file path for the saved .qs file
+  qs_file <- paste0(results_dir, "/", sample_name, "_raw.qs")
+  
+  if (RUN) {
+    # Read 10X data
+    data_dir <- sample_paths[[sample_name]]
+    sample_data <- Read10X(data.dir = data_dir)
+    
+    # Create Seurat object
+    seurat_obj <- CreateSeuratObject(counts = sample_data, 
+                                     project = paste0("PBMC_Run1_", sample_name), 
+                                     min.cells = 3, 
+                                     min.features = 200)
+    
+    # Save Seurat object using qs::qsave
+    qs::qsave(seurat_obj, file = qs_file)
+    print(paste("Processed and saved:", sample_name))
+    
+  } else {
+    # Load pre-saved Seurat object using qs::qread
+    seurat_obj <- qs::qread(qs_file)
+    print(paste("Loaded from file:", sample_name))
+  }
+  
+  # Store Seurat object in list
+  seurat_objects[[sample_name]] <- seurat_obj
+}
+
+# Confirm loaded objects
+print(names(seurat_objects))
+
+```
+
+```{r Seurat_obj}
+# Print Seurat Object Summary
+seurat_obj
+
+# View the structure
+str(seurat_obj)
+
+# View metadata for S1_W1_R1
+head(seurat_objects[["S1_W1_R1"]]@meta.data)
+
+# View metadata for S1_W1_R2
+head(seurat_objects[["S1_W1_R2"]]@meta.data)
+```
+
+
+```{r qc_step_filtered}
+
+library(Seurat)
+
+
+# Define QC RUN flag (set to TRUE for first run, FALSE for subsequent runs)
+QC_RUN <- TRUE
+
+# Initialize list to store filtered Seurat objects
+seurat_objects_filtered <- list()
+
+# Loop through each Seurat object for QC
+for (sample_name in names(seurat_objects)) {
+  
+  # Define file path for post-QC .qs file
+  qc_qs_file <- paste0(results_dir, "/", sample_name, "_postQC.qs")
+  
+  if (QC_RUN) {
+    # Load raw Seurat object
+    seurat_obj_raw <- seurat_objects[[sample_name]]
+    
+    # Calculate percent mitochondrial genes
+    seurat_obj_raw[["percent.mt"]] <- PercentageFeatureSet(seurat_obj_raw, pattern = "^MT-")
+    
+    # Load required libraries
+library(ggplot2)
+library(patchwork)
+    
+    # Visualize QC metrics (on raw data)
+    print(VlnPlot(seurat_obj_raw, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3))
+
+   # Scatter plots for relationships — Wrapped in print()
+    p1 <- FeatureScatter(seurat_obj_raw, feature1 = "nCount_RNA", feature2 = "percent.mt")
+    p2 <- FeatureScatter(seurat_obj_raw, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
+    print(p1 + p2)
+    
+    # Apply QC filters to create a filtered object (adjust thresholds as needed)
+    seurat_obj_filtered <- subset(seurat_obj_raw, subset = nFeature_RNA > 200 & nFeature_RNA < 2500 & percent.mt < 5)
+    
+    # Save post-QC Seurat object
+    qs::qsave(seurat_obj_filtered, qc_qs_file)
+    print(paste("QC completed and saved for:", sample_name))
+    
+  } else {
+    # Load pre-saved post-QC Seurat object
+    seurat_obj_filtered <- qs::qread(qc_qs_file)
+    print(paste("Loaded post-QC object for:", sample_name))
+  }
+  
+  # Store filtered object in a separate list
+  seurat_objects_filtered[[sample_name]] <- seurat_obj_filtered
+}
+
+# Confirm QC completion
+print("QC step completed for all samples.")
+
+```
+
+
+```{r plot_external, echo=TRUE, fig.show='hide'}
+VlnPlot(seurat_obj_raw, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+
+```
+
+```{r qc_step_filtered}
+
+# Define QC RUN flag (set to TRUE for first run, FALSE for subsequent runs)
+QC_RUN <- FALSE
+
+# Load required libraries
+library(ggplot2)
+library(patchwork)
+library(Seurat)
+
+# Initialize list to store filtered Seurat objects
+seurat_objects_filtered <- list()
+
+# Loop through each Seurat object for QC
+for (sample_name in names(seurat_objects)) {
+  
+  # Define file paths
+  qc_qs_file <- paste0(results_dir, "/", sample_name, "_postQC.qs")
+  vln_plot_file <- paste0(results_dir, "/Visualize_QC_metrics/", sample_name, "_vln_plot.png")
+scatter_plot_file <- paste0(results_dir, "/Visualize_QC_metrics/", sample_name, "_scatter_plot.png")
+
+  
+  if (QC_RUN) {
+    # Load raw Seurat object
+    seurat_obj_raw <- seurat_objects[[sample_name]]
+    
+    # Calculate percent mitochondrial genes
+    seurat_obj_raw[["percent.mt"]] <- PercentageFeatureSet(seurat_obj_raw, pattern = "^MT-")
+    
+    ## ---- SAVE VIOLIN PLOT ---- ##
+    vln_plot <- VlnPlot(seurat_obj_raw, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+    ggsave(filename = vln_plot_file, plot = vln_plot, width = 10, height = 5, dpi = 300)
+    print(paste("Violin plot saved for:", sample_name))
+    
+    ## ---- SAVE SCATTER PLOT ---- ##
+    p1 <- FeatureScatter(seurat_obj_raw, feature1 = "nCount_RNA", feature2 = "percent.mt")
+    p2 <- FeatureScatter(seurat_obj_raw, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
+    scatter_plot <- p1 + p2
+    ggsave(filename = scatter_plot_file, plot = scatter_plot, width = 10, height = 5, dpi = 300)
+    print(paste("Scatter plot saved for:", sample_name))
+    
+    # Apply QC filters to create a filtered object
+    seurat_obj_filtered <- subset(seurat_obj_raw, subset = nFeature_RNA > 200 & nFeature_RNA < 2500 & percent.mt < 5)
+    
+    # Save post-QC Seurat object
+    qs::qsave(seurat_obj_filtered, qc_qs_file)
+    print(paste("QC completed and saved for:", sample_name))
+    
+  } else {
+    # Load pre-saved post-QC Seurat object
+    seurat_obj_filtered <- qs::qread(qc_qs_file)
+    print(paste("Loaded post-QC object for:", sample_name))
+    
+    ## ---- DISPLAY SAVED PLOTS ---- ##
+    # Violin Plot
+    grid::grid.raster(png::readPNG(vln_plot_file))
+    # Scatter Plot
+    grid::grid.raster(png::readPNG(scatter_plot_file))
+  }
+  
+  # Store filtered object in a separate list
+  seurat_objects_filtered[[sample_name]] <- seurat_obj_filtered
+}
+
+# Confirm QC completion
+print("QC step completed for all samples.")
+
+
+```
+
+```{r Normalized_data}
+
+
+# Define Normalization RUN flag (set to TRUE for first run, FALSE to load saved objects)
+NORM_RUN <- TRUE
+
+# Initialize list to store normalized Seurat objects
+seurat_objects_normalized <- list()
+
+# Loop through each post-QC Seurat object for normalization
+for (sample_name in names(seurat_objects_filtered)) {
+  
+  # Define file path for post-normalization .qs file
+  norm_qs_file <- paste0(results_dir, "/", sample_name, "_normalized.qs")
+  
+  if (NORM_RUN) {
+    # Load post-QC Seurat object
+    seurat_obj_filtered <- seurat_objects_filtered[[sample_name]]
+    
+    # Apply LogNormalization
+    seurat_obj_norm <- NormalizeData(seurat_obj_filtered, normalization.method = "LogNormalize", scale.factor = 10000)
+    
+    # Save normalized Seurat object using qs::qsave
+    qs::qsave(seurat_obj_norm, norm_qs_file)
+    print(paste("Normalization completed and saved for:", sample_name))
+    
+  } else {
+    # Load pre-saved normalized Seurat object
+    seurat_obj_norm <- qs::qread(norm_qs_file)
+    print(paste("Loaded normalized object for:", sample_name))
+  }
+  
+  # Store normalized object in list
+  seurat_objects_normalized[[sample_name]] <- seurat_obj_norm
+}
+
+# Confirm normalization completion
+print("Normalization step completed for all samples.")
+
+
+```
+
+```{r str_seurat_obj_norm}
+
+str(seurat_obj_norm)
+
+```
+
+
+
+```{r feature_selection}
+
+# Define Feature Selection RUN flag (set to TRUE for first run, FALSE to load saved objects)
+FEATURE_RUN <- TRUE
+
+# Initialize list to store Seurat objects with variable features
+seurat_objects_variable <- list()
+
+# Loop through each normalized Seurat object for feature selection
+for (sample_name in names(seurat_objects_normalized)) {
+  
+  # Define file path for post-feature selection .qs file
+  feature_qs_file <- paste0(results_dir, "/", sample_name, "_variable_features.qs")
+  
+  if (FEATURE_RUN) {
+    # Load normalized Seurat object
+    seurat_obj_norm <- seurat_objects_normalized[[sample_name]]
+    
+    # Identify highly variable features
+    seurat_obj_var <- FindVariableFeatures(seurat_obj_norm, selection.method = "vst", nfeatures = 2000)
+    
+    # Save Seurat object with variable features
+    qs::qsave(seurat_obj_var, feature_qs_file)
+    print(paste("Feature selection completed and saved for:", sample_name))
+    
+    # Identify the top 10 most highly variable genes
+    top10 <- head(VariableFeatures(seurat_obj_var), 10)
+    
+    # Visualize variable features
+    plot1 <- VariableFeaturePlot(seurat_obj_var)
+    labeled_plot <- LabelPoints(plot = plot1, points = top10, repel = TRUE)
+    
+    
+    # Save the plot as PNG
+    plot_file <- paste0(results_dir, "/Visualize_Feature_Selection/", sample_name, "_variable_features.png")
+    ggsave(plot_file, labeled_plot, width = 8, height = 6)
+    print(paste("Variable feature plot saved for:", sample_name))
+    
+  } else {
+    # Load pre-saved Seurat object with variable features
+    seurat_obj_var <- qs::qread(feature_qs_file)
+    print(paste("Loaded Seurat object with variable features for:", sample_name))
+  }
+  
+  # Store Seurat object in the list
+  seurat_objects_variable[[sample_name]] <- seurat_obj_var
+}
+
+# Confirm feature selection completion
+print("Feature selection step completed for all samples.")
+
+```
+
+
+
+
+
