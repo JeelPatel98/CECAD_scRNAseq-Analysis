@@ -1,0 +1,606 @@
+---
+title: "Final_code_RUN1"
+author: "Jeel Patel"
+date: "2025-02-25"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+---
+title: "PBMC_Run1_4plex"
+author: "Jeel Patel"
+date: "2025-02-21"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r load_libraries}
+# Install packages if not already installed
+if (!requireNamespace("Seurat", quietly = TRUE)) install.packages("Seurat")
+if (!requireNamespace("qs", quietly = TRUE)) install.packages("qs")
+if (!requireNamespace("dplyr", quietly = TRUE)) install.packages("dplyr")
+
+# Load libraries
+library(Seurat)
+library(qs)
+library(dplyr)
+
+```
+
+
+######################### Define Sample Paths ##################################
+
+```{r define_sample_paths}
+
+# Define paths to the filtered_feature_bc_matrix directories for Run1
+sample_paths <- list(
+  "S1_W1_R1" = "/tank2/jpatel/CR_count_results/Individual_Samples/4plex_subpool1_run1_CRC/S1_W1_R1_count/outs/filtered_feature_bc_matrix",
+  "S1_W1_R2" = "/tank2/jpatel/CR_count_results/Individual_Samples/4plex_subpool1_run1_CRC/S1_W1_R2_count/outs/filtered_feature_bc_matrix",
+  "S1_W1_R3" = "/tank2/jpatel/CR_count_results/Individual_Samples/4plex_subpool1_run1_CRC/S1_W1_R3_count/outs/filtered_feature_bc_matrix",
+  "S1_W1_R4" = "/tank2/jpatel/CR_count_results/Individual_Samples/4plex_subpool1_run1_CRC/S1_W1_R4_count/outs/filtered_feature_bc_matrix"
+)
+
+# Print the sample paths to confirm
+print(sample_paths)
+
+```
+
+
+#################### Load sample and create seurat onject ######################
+
+
+```{r load_samples}
+# Define RUN flag (set to TRUE for first run, FALSE for subsequent runs)
+RUN <- FALSE
+
+# Specify the results directory
+results_dir <- "PBMC_Run1_4plex_results"
+
+# Ensure the results directory exists
+if (!dir.exists(results_dir)) {
+  dir.create(results_dir)
+}
+
+# Initialize list to store Seurat objects
+seurat_objects <- list()
+
+# Loop through sample paths
+for (sample_name in names(sample_paths)) {
+  
+  # Define file path for the saved .qs file
+  qs_file <- paste0(results_dir, "/", sample_name, "_raw.qs")
+  
+  if (RUN) {
+    # Read 10X data
+    data_dir <- sample_paths[[sample_name]]
+    sample_data <- Read10X(data.dir = data_dir)
+    
+    # Create Seurat object
+    seurat_obj <- CreateSeuratObject(counts = sample_data, 
+                                     project = paste0("PBMC_Run1_", sample_name), 
+                                     min.cells = 3, 
+                                     min.features = 200)
+    
+    # Save Seurat object using qs::qsave
+    qs::qsave(seurat_obj, file = qs_file)
+    print(paste("Processed and saved:", sample_name))
+    
+  } else {
+    # Load pre-saved Seurat object using qs::qread
+    seurat_obj <- qs::qread(qs_file)
+    print(paste("Loaded from file:", sample_name))
+  }
+  
+  # Store Seurat object in list
+  seurat_objects[[sample_name]] <- seurat_obj
+}
+
+# Confirm loaded objects
+print(names(seurat_objects))
+
+```
+
+########################## structure of seurat object ##########################
+
+```{r Explore_structure}
+
+# Print Seurat Object Summary
+seurat_obj
+
+# View the structure
+str(seurat_obj)
+
+# View metadata for S1_W1_R1
+head(seurat_objects[["S1_W1_R1"]]@meta.data)
+
+# View metadata for S1_W1_R2
+head(seurat_objects[["S1_W1_R2"]]@meta.data)
+
+# View metadata for S1_W1_R3
+head(seurat_objects[["S1_W1_R3"]]@meta.data)
+
+# View metadata for S1_W1_R4
+head(seurat_objects[["S1_W1_R4"]]@meta.data)
+
+```
+
+
+
+
+```{r}
+
+nrow(seurat_objects[["S1_W1_R1"]]@meta.data)
+# View metadata for S1_W1_R2
+
+```
+
+
+####################### Add percent.mt -> seurat_objects #######################
+
+
+
+```{r check_MT_before_QC, fig.width=10, fig.height=5}
+
+
+# Loop through each Seurat object for QC
+for (sample_name in names(seurat_objects)) {
+  
+ 
+    # Load raw Seurat object
+    seurat_obj <- seurat_objects[[sample_name]]
+    
+    # Calculate percent mitochondrial genes
+    seurat_obj[["percent.mt"]] <- PercentageFeatureSet(seurat_obj, pattern = "^MT-")
+    
+     ## ---- SAVE VIOLIN PLOT ---- ##
+    vln_plot <- VlnPlot(seurat_obj, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+    print(vln_plot)
+    
+    ## ---- SAVE SCATTER PLOT ---- ##
+    p1 <- FeatureScatter(seurat_obj, feature1 = "nCount_RNA", feature2 = "percent.mt")
+    p2 <- FeatureScatter(seurat_obj, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
+    scatter_plot <- p1 + p2
+    print(scatter_plot)
+    
+    # Store filtered object in the list
+    seurat_objects[[sample_name]] <- seurat_obj
+ 
+}   
+    
+```
+
+```{r percent.mt_added}
+
+head(seurat_objects[["S1_W1_R1"]]@meta.data, 5)
+head(seurat_objects[["S1_W1_R2"]]@meta.data, 5)
+head(seurat_objects[["S1_W1_R3"]]@meta.data, 5)
+head(seurat_objects[["S1_W1_R4"]]@meta.data, 5)
+
+```
+
+
+
+```{r check_metadata_without_QC}
+
+
+# View metadata for S1_W1_R1
+
+nrow(seurat_objects[["S1_W1_R1"]]@meta.data)
+# View metadata for S1_W1_R2
+
+nrow(seurat_objects[["S1_W1_R2"]]@meta.data)
+# View metadata for S1_W1_R3
+
+nrow(seurat_objects[["S1_W1_R3"]]@meta.data)
+# View metadata for S1_W1_R4
+
+nrow(seurat_objects[["S1_W1_R4"]]@meta.data)
+```
+
+######################### Quality control filters ##############################
+
+
+```{r post_QC, fig.width=10, fig.height=5}
+
+# Loop through each Seurat object for QC
+for (sample_name in names(seurat_objects)) {
+  
+ 
+    # Load raw Seurat object
+    seurat_obj <- seurat_objects[[sample_name]]
+    
+
+  # Apply QC filters to create a filtered object (adjust thresholds as needed)
+    seurat_obj <- subset(seurat_obj, subset = nFeature_RNA > 200 & nFeature_RNA < 2500 & percent.mt < 10)
+    
+      ## ---- SAVE VIOLIN PLOT ---- ##
+    vln_plot <- VlnPlot(seurat_obj, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+    print(vln_plot)
+    
+    ## ---- SAVE SCATTER PLOT ---- ##
+    p1 <- FeatureScatter(seurat_obj, feature1 = "nCount_RNA", feature2 = "percent.mt")
+    p2 <- FeatureScatter(seurat_obj, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
+    scatter_plot <- p1 + p2
+    print(scatter_plot)
+    
+    # Store filtered object in the list
+    seurat_objects[[sample_name]] <- seurat_obj
+}
+
+# Confirm QC completion
+print("QC step completed for all samples.")
+
+
+```
+
+
+```{r}
+
+# View metadata for S1_W1_R1
+
+nrow(seurat_objects[["S1_W1_R1"]]@meta.data)
+# View metadata for S1_W1_R2
+
+nrow(seurat_objects[["S1_W1_R2"]]@meta.data)
+# View metadata for S1_W1_R3
+
+nrow(seurat_objects[["S1_W1_R3"]]@meta.data)
+# View metadata for S1_W1_R4
+
+nrow(seurat_objects[["S1_W1_R4"]]@meta.data)
+```
+
+
+########################### Normalizing the data ###############################
+
+
+
+```{r normalization_step}
+
+# Loop through each Seurat object for Normalization
+for (sample_name in names(seurat_objects)) {
+  
+  # Load Seurat object
+  seurat_obj <- seurat_objects[[sample_name]]
+  
+  # Apply LogNormalization
+  seurat_obj <- NormalizeData(seurat_obj, normalization.method = "LogNormalize", scale.factor = 10000)
+  
+  # Print confirmation for each sample
+  print(paste("Normalization completed for:", sample_name))
+  
+  # Update the object in the list
+  seurat_objects[[sample_name]] <- seurat_obj
+}
+
+# Confirm completion of normalization for all samples
+print("Normalization step completed for all samples.")
+
+```
+
+```{r str_seurat_obj}
+
+str(seurat_obj)
+
+```
+
+
+############################ Feature selection #################################
+
+
+```{r feature_selection_step, fig.width=18, fig.height=5}
+
+
+# Loop through each Seurat object for Feature Selection
+for (sample_name in names(seurat_objects)) {
+  
+  # Load Seurat object
+  seurat_obj <- seurat_objects[[sample_name]]
+  
+  # Identify highly variable features (default: 2000 genes, vst method)
+  seurat_obj <- FindVariableFeatures(seurat_obj, selection.method = "vst", nfeatures = 2000)
+  
+  # Print top 10 highly variable genes
+  top10 <- head(VariableFeatures(seurat_obj), 10)
+  print(paste("Top 10 HVGs for", sample_name, ":", paste(top10, collapse = ", ")))
+  
+  # Plot variable features with labels
+  plot1 <- VariableFeaturePlot(seurat_obj)
+  plot2 <- LabelPoints(plot = plot1, points = top10, repel = TRUE)
+  print(plot1 + plot2)
+  
+   
+  # Update the object in the list
+  seurat_objects[[sample_name]] <- seurat_obj
+  
+  # Confirm feature selection
+  print(paste("Feature selection completed for:", sample_name))
+}
+
+# Confirm completion of feature selection for all samples
+print("Feature selection step completed for all samples.")
+
+```
+
+############################## Scaling the data ################################
+
+
+```{r scale_data}
+
+# Loop through each Seurat object for Feature Selection
+for (sample_name in names(seurat_objects)) {
+  
+  # Load Seurat object
+  seurat_obj <- seurat_objects[[sample_name]]
+ 
+   # Get all genes
+  all.genes <- rownames(seurat_obj)
+  
+  # Scale the data — scaling all genes
+  seurat_obj <- ScaleData(seurat_obj, features = all.genes, verbose = FALSE)
+  
+  # Update object in the list
+  seurat_objects[[sample_name]] <- seurat_obj
+  
+  # Confirm scaling
+  print(paste("Scaling completed for:", sample_name))
+}
+
+# Confirm completion
+print("Scaling step completed for all samples.")
+  
+   
+```
+
+
+```{r str_seurat_obj}
+
+str(seurat_obj)
+
+```
+
+
+
+##################### linear dimensional reduction (PCA) #######################
+
+
+```{r PCA_step}
+
+# Loop through each Seurat object for PCA
+for (sample_name in names(seurat_objects)) {
+
+  # Load Seurat object
+  seurat_obj <- seurat_objects[[sample_name]]
+  
+  # Run PCA using variable features
+  seurat_obj <- RunPCA(seurat_obj, features = VariableFeatures(object = seurat_obj))
+  print(paste("PCA completed for:", sample_name))
+  
+  # Print PCA results for first 5 PCs with top 5 features
+  print(seurat_obj[["pca"]], dims = 1:5, nfeatures = 5)
+  
+  # Visualize PCA results using DimHeatmap
+  DimHeatmap(seurat_obj, dims = 1, cells = 500, balanced = TRUE)
+  
+  # Update the object in the list with PCA results
+  seurat_objects[[sample_name]] <- seurat_obj
+}
+
+# Confirm PCA completion
+print("PCA step completed for all samples.")
+
+```
+
+
+
+############### Determine the ‘dimensionality’ of the dataset ##################
+
+
+
+
+```{r Determine_DimentionalityofData}
+
+library(ggplot2)
+
+# Loop through each Seurat object to generate and display Elbow Plots
+for (sample_name in names(seurat_objects)) {
+  
+  # Extract the Seurat object
+  seurat_obj <- seurat_objects[[sample_name]]
+  
+  # Generate Elbow Plot with sample name as title
+  elbow_plot <- ElbowPlot(seurat_obj) + ggtitle(paste("Elbow Plot -", sample_name))
+  
+  # Display the plot
+  print(elbow_plot)
+}
+
+```
+
+
+
+############################# Cluster the cells ################################
+
+
+```{r Cluster_cells}
+
+# Loop through each Seurat object for clustering
+for (sample_name in names(seurat_objects)) {
+  
+  # Extract the Seurat object
+  seurat_obj <- seurat_objects[[sample_name]]
+  
+  # Step 1: Find Neighbors (using first 10 PCs)
+  seurat_obj <- FindNeighbors(seurat_obj, dims = 1:7)
+  
+  # Step 2: Find Clusters (Louvain algorithm with resolution 0.5)
+  seurat_obj <- FindClusters(seurat_obj, resolution = 1.0)
+  
+  # Display a message for progress
+  print(paste("Clustering completed for:", sample_name))
+  
+  # Optional: Display the first few cluster assignments
+  print(head(Idents(seurat_obj), 5))
+  
+  # Update the object in the list
+  seurat_objects[[sample_name]] <- seurat_obj
+}
+
+# Confirm completion
+print("Cell clustering completed for all samples.")
+
+
+```
+
+
+############################## UMAP ############################################
+
+```{r non-linear_dimensional_reduction}
+
+
+# Loop through each Seurat object for UMAP
+for (sample_name in names(seurat_objects)) {
+  
+  # Load Seurat object
+  seurat_obj <- seurat_objects[[sample_name]]
+  
+  # Run UMAP using first 10 PCs
+  seurat_obj <- RunUMAP(seurat_obj, dims = 1:7)
+  
+  # Plot UMAP with cluster labels
+  umap_plot <- DimPlot(seurat_obj, reduction = "umap", label = TRUE, repel = TRUE) + ggtitle(paste0("UMAP Plot - ", sample_name))
+  
+  # Display the UMAP plot
+  print(umap_plot)
+  print(FeaturePlot(seurat_obj, features = "percent.mt"))
+  
+  # Save UMAP plot as PNG
+  plot_file <- paste0(results_dir, "/UMAP_Plots/", sample_name, "_UMAP.png")
+  ggsave(plot_file, umap_plot, width = 8, height = 6, dpi = 300)
+  print(paste("UMAP plot saved for:", sample_name))
+  
+  # Save the processed Seurat object as .qs
+  qs_file <- paste0(results_dir, "/", sample_name, "_umap.qs")
+  qs::qsave(seurat_obj, file = qs_file)
+  print(paste("UMAP Seurat object saved for:", sample_name))
+  
+  # Update object in the list
+  seurat_objects[[sample_name]] <- seurat_obj
+}
+
+# Confirm completion
+print("UMAP and saving completed for all samples.")
+
+```
+
+
+
+############################ cluster biomarkers ################################
+
+
+```{r}
+
+# Loop through each Seurat object for UMAP
+for (sample_name in names(seurat_objects)) {
+  
+  # Load Seurat object
+  seurat_obj <- seurat_objects[[sample_name]]
+  
+  # find all markers of cluster 2
+cluster2.markers <- FindMarkers(seurat_obj, ident.1 = 2)
+head(cluster2.markers, n = 5)
+
+
+
+}
+
+
+
+
+```
+
+
+
+############################# Annotation-Azimuth ###############################
+
+
+```{r}
+
+library(Azimuth)
+
+# Loop through each Seurat object for UMAP
+for (sample_name in names(seurat_objects)) {
+  
+  
+  
+seurat_objects[[sample_name]] <- RunAzimuth(seurat_objects[[sample_name]], reference = "pbmcref")
+
+
+} 
+
+```
+
+
+```{r}
+# Loop through each Seurat object for UMAP
+for (sample_name in names(seurat_objects)) {
+
+predicted.celltype.l1= c("CD4 T", "CD8 T", "other T", "B", "Mono", "NK", "other", "DC")
+broad.annotation= c("T", "T", "T", "B", "Mono", "NK", "other", "DC")
+ map <- setNames(broad.annotation, predicted.celltype.l1)
+
+
+seurat_objects[[sample_name]]@meta.data[["broad.annotation"]] <- map[seurat_objects[[sample_name]][["predicted.celltype.l1"]] [, 1]]
+
+}
+```
+
+
+
+```{r}
+
+seurat_objects[[sample_name]]@meta.data
+
+
+```
+
+```{r}
+?RunAzimuth
+```
+
+
+```{r}
+
+DimPlot(seurat_objects$S1_W1_R1, group.by = "broad.annotation")
+DimPlot(seurat_objects$S1_W1_R2, group.by = "broad.annotation")
+DimPlot(seurat_objects$S1_W1_R3, group.by = "broad.annotation")
+DimPlot(seurat_objects$S1_W1_R4, group.by = "broad.annotation")
+```
+
+
+
+
+
+
+
+
+
+ 
+
+
+
+
+
+
+
+
+
+
+
+
+
