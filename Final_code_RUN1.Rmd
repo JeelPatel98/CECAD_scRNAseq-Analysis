@@ -588,6 +588,52 @@ DimPlot(seurat_objects$S1_W1_R4, group.by = "broad.annotation")
 
 
 
+############### New Azimuth chunk to save the seurat object ####################
+
+```{r}
+
+library(Azimuth)
+
+# Define RUN flag (set to TRUE for first run, FALSE for subsequent runs)
+RUN <- FALSE
+
+# Manually specify the results directory
+results_dir <- "PBMC_Run1_4plex_results"
+
+
+# Loop through each Seurat object for UMAP
+for (sample_name in names(seurat_objects)) {
+  
+
+   if (RUN) {
+ 
+      # Load raw Seurat object
+    seurat_obj <- seurat_objects[[sample_name]]
+    
+    seurat_obj <- RunAzimuth(seurat_obj, reference = "pbmcref")
+    
+    # Save Seurat object
+    qs_file <- paste0(results_dir, "/", sample_name, "_azimuth.qs")
+    qs::qsave(seurat_obj, qs_file)
+    print(paste("Azimuth completed and saved for:", sample_name))
+    
+   } else {
+    # Load pre-saved post-QC Seurat object
+    seurat_obj <- qs::qread(qs_file)
+    print(paste("Loaded Azimuth object for:", sample_name))
+    
+   # Update object in the list
+  seurat_objects[[sample_name]] <- seurat_obj
+}
+
+
+
+} 
+
+```
+
+
+
 
 
  
