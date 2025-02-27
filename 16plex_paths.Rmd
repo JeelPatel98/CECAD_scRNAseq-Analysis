@@ -1,0 +1,128 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+
+
+```{r define_sample_paths}
+
+# Define paths to the filtered_feature_bc_matrix directories for Run1
+sample_paths <- list(
+  "S1_W1_R1" = "/tank2/jpatel/CR_count_results/Individual_Samples/16-plex_pool1_run5_CRC/S1_W1_R1_count/outs/filtered_feature_bc_matrix",
+  "S1_W1_R2" = "/tank2/jpatel/CR_count_results/Individual_Samples/16-plex_pool1_run5_CRC/S1_W1_R2_count/outs/filtered_feature_bc_matrix",
+  "S1_W1_R3" = "/tank2/jpatel/CR_count_results/Individual_Samples/16-plex_pool1_run5_CRC/S1_W1_R3_count/outs/filtered_feature_bc_matrix",
+  "S1_W1_R4" = "/tank2/jpatel/CR_count_results/Individual_Samples/16-plex_pool1_run5_CRC/S1_W1_R4_count/outs/filtered_feature_bc_matrix",
+  "S1_W2_R1" = "/tank2/jpatel/CR_count_results/Individual_Samples/16-plex_pool1_run5_CRC/S1_W2_R1_count/outs/filtered_feature_bc_matrix",
+  "S1_W2_R2" = "/tank2/jpatel/CR_count_results/Individual_Samples/16-plex_pool1_run5_CRC/S1_W2_R2_count/outs/filtered_feature_bc_matrix",
+  "S1_W2_R3" = "/tank2/jpatel/CR_count_results/Individual_Samples/16-plex_pool1_run5_CRC/S1_W2_R3_count/outs/filtered_feature_bc_matrix",
+  "S1_W2_R4" = "/tank2/jpatel/CR_count_results/Individual_Samples/16-plex_pool1_run5_CRC/S1_W2_R4_count/outs/filtered_feature_bc_matrix",
+  "S2_W1_R1" = "/tank2/jpatel/CR_count_results/Individual_Samples/16-plex_pool1_run5_CRC/S2_W1_R1_count/outs/filtered_feature_bc_matrix",
+  "S2_W1_R2" = "/tank2/jpatel/CR_count_results/Individual_Samples/16-plex_pool1_run5_CRC/S2_W1_R2_count/outs/filtered_feature_bc_matrix",
+  "S2_W1_R3" = "/tank2/jpatel/CR_count_results/Individual_Samples/16-plex_pool1_run5_CRC/S2_W1_R3_count/outs/filtered_feature_bc_matrix",
+  "S2_W1_R4" = "/tank2/jpatel/CR_count_results/Individual_Samples/16-plex_pool1_run5_CRC/S2_W1_R4_count/outs/filtered_feature_bc_matrix",
+  "S2_W2_R1" = "/tank2/jpatel/CR_count_results/Individual_Samples/16-plex_pool1_run5_CRC/S2_W2_R1_count/outs/filtered_feature_bc_matrix",
+  "S2_W2_R2" = "/tank2/jpatel/CR_count_results/Individual_Samples/16-plex_pool1_run5_CRC/S2_W2_R2_count/outs/filtered_feature_bc_matrix",
+  "S2_W2_R3" = "/tank2/jpatel/CR_count_results/Individual_Samples/16-plex_pool1_run5_CRC/S2_W2_R3_count/outs/filtered_feature_bc_matrix",
+  "S2_W2_R4" = "/tank2/jpatel/CR_count_results/Individual_Samples/16-plex_pool1_run5_CRC/S2_W2_R4_count/outs/filtered_feature_bc_matrix"
+)
+
+# Print the sample paths to confirm
+print(sample_paths)
+
+```
+
+
+
+```{r Explore_structure}
+
+# Print Seurat Object Summary
+seurat_obj
+
+# View the structure
+str(seurat_obj)
+
+# View metadata for samples
+
+head(seurat_objects[["S1_W1_R1"]]@meta.data)
+head(seurat_objects[["S1_W1_R2"]]@meta.data)
+head(seurat_objects[["S1_W1_R3"]]@meta.data)
+head(seurat_objects[["S1_W1_R4"]]@meta.data)
+head(seurat_objects[["S1_W2_R1"]]@meta.data)
+head(seurat_objects[["S1_W2_R2"]]@meta.data)
+head(seurat_objects[["S1_W2_R3"]]@meta.data)
+head(seurat_objects[["S1_W2_R4"]]@meta.data)
+head(seurat_objects[["S2_W1_R1"]]@meta.data)
+head(seurat_objects[["S2_W1_R2"]]@meta.data)
+head(seurat_objects[["S2_W1_R3"]]@meta.data)
+head(seurat_objects[["S2_W1_R4"]]@meta.data)
+head(seurat_objects[["S2_W2_R1"]]@meta.data)
+head(seurat_objects[["S2_W2_R2"]]@meta.data)
+head(seurat_objects[["S2_W2_R3"]]@meta.data)
+head(seurat_objects[["S2_W2_R4"]]@meta.data)
+
+```
+
+
+
+```{r check_nrow}
+
+# View metadata for samples
+nrow(seurat_objects[["S1_W1_R1"]]@meta.data)
+nrow(seurat_objects[["S1_W1_R2"]]@meta.data)
+nrow(seurat_objects[["S1_W1_R3"]]@meta.data)
+nrow(seurat_objects[["S1_W1_R4"]]@meta.data)
+nrow(seurat_objects[["S1_W2_R1"]]@meta.data)
+nrow(seurat_objects[["S1_W2_R2"]]@meta.data)
+nrow(seurat_objects[["S1_W2_R3"]]@meta.data)
+nrow(seurat_objects[["S1_W2_R4"]]@meta.data)
+nrow(seurat_objects[["S2_W1_R1"]]@meta.data)
+nrow(seurat_objects[["S2_W1_R2"]]@meta.data)
+nrow(seurat_objects[["S2_W1_R3"]]@meta.data)
+nrow(seurat_objects[["S2_W1_R4"]]@meta.data)
+nrow(seurat_objects[["S2_W2_R1"]]@meta.data)
+nrow(seurat_objects[["S2_W2_R2"]]@meta.data)
+nrow(seurat_objects[["S2_W2_R3"]]@meta.data)
+nrow(seurat_objects[["S2_W2_R4"]]@meta.data)
+
+
+```
+
+
+
+############################## UMAP ############################################
+
+
+```{r non-linear_dimensional_reduction}
+
+
+# Loop through each Seurat object for UMAP
+for (sample_name in names(seurat_objects)) {
+  
+  # Load Seurat object
+  seurat_obj <- seurat_objects[[sample_name]]
+  
+  # Run UMAP using first 10 PCs
+  seurat_obj <- RunUMAP(seurat_obj, dims = 1:7)
+  
+  # Plot UMAP with cluster labels
+  umap_plot <- DimPlot(seurat_obj, reduction = "umap", label = TRUE, repel = TRUE) + ggtitle(paste0("UMAP Plot - ", sample_name))
+  
+  # Display the UMAP plot
+  print(umap_plot)
+  print(FeaturePlot(seurat_obj, features = "percent.mt"))
+  
+  # Update object in the list
+  seurat_objects[[sample_name]] <- seurat_obj
+}
+
+# Confirm completion
+print("UMAP completed for all samples.")
+
+```
+
+
+
+
+
+
