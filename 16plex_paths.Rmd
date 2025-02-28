@@ -9,22 +9,22 @@ output: html_notebook
 
 # Define paths to the filtered_feature_bc_matrix directories for Run1
 sample_paths <- list(
-  "S1_W1_R1" = "/tank2/jpatel/CR_count_results/Individual_Samples/16-plex_pool1_run5_CRC/S1_W1_R1_count/outs/filtered_feature_bc_matrix",
-  "S1_W1_R2" = "/tank2/jpatel/CR_count_results/Individual_Samples/16-plex_pool1_run5_CRC/S1_W1_R2_count/outs/filtered_feature_bc_matrix",
-  "S1_W1_R3" = "/tank2/jpatel/CR_count_results/Individual_Samples/16-plex_pool1_run5_CRC/S1_W1_R3_count/outs/filtered_feature_bc_matrix",
-  "S1_W1_R4" = "/tank2/jpatel/CR_count_results/Individual_Samples/16-plex_pool1_run5_CRC/S1_W1_R4_count/outs/filtered_feature_bc_matrix",
-  "S1_W2_R1" = "/tank2/jpatel/CR_count_results/Individual_Samples/16-plex_pool1_run5_CRC/S1_W2_R1_count/outs/filtered_feature_bc_matrix",
-  "S1_W2_R2" = "/tank2/jpatel/CR_count_results/Individual_Samples/16-plex_pool1_run5_CRC/S1_W2_R2_count/outs/filtered_feature_bc_matrix",
-  "S1_W2_R3" = "/tank2/jpatel/CR_count_results/Individual_Samples/16-plex_pool1_run5_CRC/S1_W2_R3_count/outs/filtered_feature_bc_matrix",
-  "S1_W2_R4" = "/tank2/jpatel/CR_count_results/Individual_Samples/16-plex_pool1_run5_CRC/S1_W2_R4_count/outs/filtered_feature_bc_matrix",
-  "S2_W1_R1" = "/tank2/jpatel/CR_count_results/Individual_Samples/16-plex_pool1_run5_CRC/S2_W1_R1_count/outs/filtered_feature_bc_matrix",
-  "S2_W1_R2" = "/tank2/jpatel/CR_count_results/Individual_Samples/16-plex_pool1_run5_CRC/S2_W1_R2_count/outs/filtered_feature_bc_matrix",
-  "S2_W1_R3" = "/tank2/jpatel/CR_count_results/Individual_Samples/16-plex_pool1_run5_CRC/S2_W1_R3_count/outs/filtered_feature_bc_matrix",
-  "S2_W1_R4" = "/tank2/jpatel/CR_count_results/Individual_Samples/16-plex_pool1_run5_CRC/S2_W1_R4_count/outs/filtered_feature_bc_matrix",
-  "S2_W2_R1" = "/tank2/jpatel/CR_count_results/Individual_Samples/16-plex_pool1_run5_CRC/S2_W2_R1_count/outs/filtered_feature_bc_matrix",
-  "S2_W2_R2" = "/tank2/jpatel/CR_count_results/Individual_Samples/16-plex_pool1_run5_CRC/S2_W2_R2_count/outs/filtered_feature_bc_matrix",
-  "S2_W2_R3" = "/tank2/jpatel/CR_count_results/Individual_Samples/16-plex_pool1_run5_CRC/S2_W2_R3_count/outs/filtered_feature_bc_matrix",
-  "S2_W2_R4" = "/tank2/jpatel/CR_count_results/Individual_Samples/16-plex_pool1_run5_CRC/S2_W2_R4_count/outs/filtered_feature_bc_matrix"
+  "S1_W1_R1" = "/tank2/jpatel/CR_count_results/Individual_Samples/16-plex_Bal_run8_CRC/S1_W1_R1_count/outs/filtered_feature_bc_matrix",
+  "S1_W1_R2" = "/tank2/jpatel/CR_count_results/Individual_Samples/16-plex_Bal_run8_CRC/S1_W1_R2_count/outs/filtered_feature_bc_matrix",
+  "S1_W1_R3" = "/tank2/jpatel/CR_count_results/Individual_Samples/16-plex_Bal_run8_CRC/S1_W1_R3_count/outs/filtered_feature_bc_matrix",
+  "S1_W1_R4" = "/tank2/jpatel/CR_count_results/Individual_Samples/16-plex_Bal_run8_CRC/S1_W1_R4_count/outs/filtered_feature_bc_matrix",
+  "S1_W2_R1" = "/tank2/jpatel/CR_count_results/Individual_Samples/16-plex_Bal_run8_CRC/S1_W2_R1_count/outs/filtered_feature_bc_matrix",
+  "S1_W2_R2" = "/tank2/jpatel/CR_count_results/Individual_Samples/16-plex_Bal_run8_CRC/S1_W2_R2_count/outs/filtered_feature_bc_matrix",
+  "S1_W2_R3" = "/tank2/jpatel/CR_count_results/Individual_Samples/16-plex_Bal_run8_CRC/S1_W2_R3_count/outs/filtered_feature_bc_matrix",
+  "S1_W2_R4" = "/tank2/jpatel/CR_count_results/Individual_Samples/16-plex_Bal_run8_CRC/S1_W2_R4_count/outs/filtered_feature_bc_matrix",
+  "S2_W1_R1" = "/tank2/jpatel/CR_count_results/Individual_Samples/16-plex_Bal_run8_CRC/S2_W1_R1_count/outs/filtered_feature_bc_matrix",
+  "S2_W1_R2" = "/tank2/jpatel/CR_count_results/Individual_Samples/16-plex_Bal_run8_CRC/S2_W1_R2_count/outs/filtered_feature_bc_matrix",
+  "S2_W1_R3" = "/tank2/jpatel/CR_count_results/Individual_Samples/16-plex_Bal_run8_CRC/S2_W1_R3_count/outs/filtered_feature_bc_matrix",
+  "S2_W1_R4" = "/tank2/jpatel/CR_count_results/Individual_Samples/16-plex_Bal_run8_CRC/S2_W1_R4_count/outs/filtered_feature_bc_matrix",
+  "S2_W2_R1" = "/tank2/jpatel/CR_count_results/Individual_Samples/16-plex_Bal_run8_CRC/S2_W2_R1_count/outs/filtered_feature_bc_matrix",
+  "S2_W2_R2" = "/tank2/jpatel/CR_count_results/Individual_Samples/16-plex_Bal_run8_CRC/S2_W2_R2_count/outs/filtered_feature_bc_matrix",
+  "S2_W2_R3" = "/tank2/jpatel/CR_count_results/Individual_Samples/16-plex_Bal_run8_CRC/S2_W2_R3_count/outs/filtered_feature_bc_matrix",
+  "S2_W2_R4" = "/tank2/jpatel/CR_count_results/Individual_Samples/16-plex_Bal_run8_CRC/S2_W2_R4_count/outs/filtered_feature_bc_matrix"
 )
 
 # Print the sample paths to confirm
@@ -124,5 +124,57 @@ print("UMAP completed for all samples.")
 
 
 
+############################### after Azimuth ##################################
 
+
+```{r metadata_with mapping}
+
+seurat_objects[["S1_W1_R1"]]@meta.data
+seurat_objects[["S1_W1_R2"]]@meta.data
+seurat_objects[["S1_W1_R3"]]@meta.data
+seurat_objects[["S1_W1_R4"]]@meta.data
+seurat_objects[["S1_W2_R1"]]@meta.data
+seurat_objects[["S1_W2_R2"]]@meta.data
+seurat_objects[["S1_W2_R3"]]@meta.data
+seurat_objects[["S1_W2_R4"]]@meta.data
+seurat_objects[["S2_W1_R1"]]@meta.data
+seurat_objects[["S2_W1_R2"]]@meta.data
+seurat_objects[["S2_W1_R3"]]@meta.data
+seurat_objects[["S2_W1_R4"]]@meta.data
+seurat_objects[["S2_W2_R1"]]@meta.data
+seurat_objects[["S2_W2_R2"]]@meta.data
+seurat_objects[["S2_W2_R3"]]@meta.data
+seurat_objects[["S2_W2_R4"]]@meta.data
+
+
+```
+
+
+
+
+```{r}
+
+DimPlot(seurat_objects$S1_W1_R1, group.by = "broad.annotation")
+DimPlot(seurat_objects$S1_W1_R2, group.by = "broad.annotation")
+DimPlot(seurat_objects$S1_W1_R3, group.by = "broad.annotation")
+DimPlot(seurat_objects$S1_W1_R4, group.by = "broad.annotation")
+
+DimPlot(seurat_objects$S1_W2_R1, group.by = "broad.annotation")
+DimPlot(seurat_objects$S1_W2_R2, group.by = "broad.annotation")
+DimPlot(seurat_objects$S1_W2_R3, group.by = "broad.annotation")
+DimPlot(seurat_objects$S1_W2_R4, group.by = "broad.annotation")
+
+DimPlot(seurat_objects$S2_W1_R1, group.by = "broad.annotation")
+DimPlot(seurat_objects$S2_W1_R2, group.by = "broad.annotation")
+DimPlot(seurat_objects$S2_W1_R3, group.by = "broad.annotation")
+DimPlot(seurat_objects$S2_W1_R4, group.by = "broad.annotation")
+
+DimPlot(seurat_objects$S2_W2_R1, group.by = "broad.annotation")
+DimPlot(seurat_objects$S2_W2_R2, group.by = "broad.annotation")
+DimPlot(seurat_objects$S2_W2_R3, group.by = "broad.annotation")
+DimPlot(seurat_objects$S2_W2_R4, group.by = "broad.annotation")
+
+
+
+```
 
