@@ -1,0 +1,147 @@
+---
+title: "Countland_demo"
+author: "Jeel Patel"
+date: "2025-03-03"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r load_libraries}
+
+library(Seurat)
+library(countland)
+
+
+```
+
+
+######## Read the 10X Data #######
+
+```{r read_data}
+
+# Read the 10X Data
+raw_counts <- Read10X(data.dir = "/tank2/jpatel/CR_count_results/Pooled_Samples/4plex_subpool1_run1_count/outs/filtered_feature_bc_matrix")
+
+
+```
+
+
+```{r check_data}
+
+dim(raw_counts)
+
+
+```
+
+
+```{r Countland_format}
+
+# Convert to Countland format
+countland_obj <- countland::countland_from_matrix(raw_counts)
+
+```
+
+
+
+##### Run Countland ######
+
+
+```{r}
+
+countland_output <- countland::run_countland(raw_counts)
+
+
+```
+
+
+```{r}
+
+?countland
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

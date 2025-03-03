@@ -1,0 +1,347 @@
+---
+title: "Pooled_Run1_4plex"
+author: "Jeel Patel"
+date: "2025-03-02"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+```{r load_libraries}
+
+# Load libraries
+library(Seurat)
+library(qs)
+library(dplyr)
+
+```
+
+
+
+
+```{r create_seuratObject}
+
+# Define the path to the data
+data_dir <- "/tank2/jpatel/CR_count_results/Pooled_Samples/4plex_subpool1_run1_count/outs/filtered_feature_bc_matrix"
+
+# Load the filtered feature barcode matrix
+sc_data <- Read10X(data.dir = data_dir)
+
+# Initialize the Seurat object with the raw (non-normalized) data
+seurat_obj <- CreateSeuratObject(counts = sc_data, project = "pooled_4plex_run1", min.cells = 3, min.features = 200)
+
+# Print the Seurat object summary
+seurat_obj
+
+```
+
+
+
+
+
+```{r view_str}
+
+# View the structure
+str(seurat_obj)
+
+head(seurat_obj)
+
+```
+
+
+
+```{r check_nrow}
+
+nrow(seurat_obj@meta.data)
+
+```
+
+
+
+```{r check_MT_before_QC, fig.width=10, fig.height=5}
+
+ seurat_obj[["percent.mt"]] <- PercentageFeatureSet(seurat_obj, pattern = "^MT-")
+
+    ##VIOLIN PLOT  
+    vln_plot <- VlnPlot(seurat_obj, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+    print(vln_plot)
+    
+    ## SCATTER PLOT 
+    p1 <- FeatureScatter(seurat_obj, feature1 = "nCount_RNA", feature2 = "percent.mt")
+    p2 <- FeatureScatter(seurat_obj, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
+    scatter_plot <- p1 + p2
+    print(scatter_plot)
+
+```
+
+
+```{r}
+
+head(seurat_obj@meta.data, 5)
+
+```
+
+
+```{r post_QC, fig.width=10, fig.height=5}
+
+# Apply QC filters to create a filtered object (adjust thresholds as needed)
+    seurat_obj <- subset(seurat_obj, subset = nFeature_RNA > 200 & nFeature_RNA < 2500 & percent.mt < 10)
+    
+      ## ---- SAVE VIOLIN PLOT ---- ##
+    vln_plot <- VlnPlot(seurat_obj, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+    print(vln_plot)
+    
+    ## ---- SAVE SCATTER PLOT ---- ##
+    p1 <- FeatureScatter(seurat_obj, feature1 = "nCount_RNA", feature2 = "percent.mt")
+    p2 <- FeatureScatter(seurat_obj, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
+    scatter_plot <- p1 + p2
+    print(scatter_plot)
+    
+
+```
+
+```{r check_nrow}
+
+nrow(seurat_obj@meta.data)
+
+```
+
+
+```{r}
+
+# Apply LogNormalization
+  seurat_obj <- NormalizeData(seurat_obj, normalization.method = "LogNormalize", scale.factor = 10000)
+
+```
+
+
+```{r feature_selection_step, fig.width=18, fig.height=5}
+
+# Identify highly variable features (default: 2000 genes, vst method)
+  seurat_obj <- FindVariableFeatures(seurat_obj, selection.method = "vst", nfeatures = 2000)
+  
+  # Print top 10 highly variable genes
+  top10 <- head(VariableFeatures(seurat_obj), 10)
+  print(paste("Top 10 HVGs for", ":", paste(top10, collapse = ", ")))
+  
+  # Plot variable features with labels
+  plot1 <- VariableFeaturePlot(seurat_obj)
+  plot2 <- LabelPoints(plot = plot1, points = top10, repel = TRUE)
+  print(plot1 + plot2)
+
+```
+
+
+```{r scale_data}
+
+ # Get all genes
+  all.genes <- rownames(seurat_obj)
+  
+  # Scale the data — scaling all genes
+  seurat_obj <- ScaleData(seurat_obj, features = all.genes, verbose = FALSE)
+
+  # Confirm completion
+print("Scaling step completed.")
+
+```
+
+
+
+```{r}
+
+# Run PCA using variable features
+  seurat_obj <- RunPCA(seurat_obj, features = VariableFeatures(object = seurat_obj))
+  print(paste("PCA completed"))
+  
+  # Print PCA results for first 5 PCs with top 5 features
+  print(seurat_obj[["pca"]], dims = 1:5, nfeatures = 5)
+  
+  # Visualize PCA results using DimHeatmap
+  DimHeatmap(seurat_obj, dims = 1, cells = 500, balanced = TRUE)
+  
+  # Confirm PCA completion
+print("PCA step completed for all samples.")
+
+  
+
+```
+
+
+############### Determine the ‘dimensionality’ of the dataset ##################
+
+
+
+```{r Determine_DimentionalityofData}
+
+library(ggplot2)
+
+  
+  # Generate Elbow Plot with sample name as title
+  ElbowPlot(seurat_obj) 
+  
+```
+
+
+
+```{r Cluster_cells}
+
+
+# Step 1: Find Neighbors (using first 7 PCs)
+  seurat_obj <- FindNeighbors(seurat_obj, dims = 1:7)
+  
+  # Step 2: Find Clusters (Louvain algorithm with resolution 1.0  [higher the number - more clusters])
+  seurat_obj <- FindClusters(seurat_obj, resolution = 0.5)
+  
+  # Confirm completion
+print("Cell clustering completed for all samples.")
+
+
+```
+
+
+```{r}
+
+# Run UMAP using first 10 PCs
+  seurat_obj <- RunUMAP(seurat_obj, dims = 1:7)
+  
+  # Plot UMAP with cluster labels
+  DimPlot(seurat_obj, reduction = "umap", label = TRUE, repel = TRUE) 
+  
+  # Display the feature plot
+  
+  print(FeaturePlot(seurat_obj, features = "percent.mt"))
+  
+  # Confirm completion
+print("UMAP and feature plot completed.")
+
+  
+```
+
+
+
+############################ cluster biomarkers ################################
+
+
+```{r cluster_biomarker}
+ 
+# find all markers of cluster 2
+cluster2.markers <- FindMarkers(seurat_obj, ident.1 = 2)
+head(cluster2.markers, n = 5)
+
+
+```
+
+
+```{r markers_for_ Cluster5}
+
+# find all markers distinguishing cluster 5 from clusters 0 and 3
+cluster5.markers <- FindMarkers(seurat_obj, ident.1 = 5, ident.2 = c(0, 3))
+head(cluster5.markers, n = 5)
+
+
+```
+
+
+```{r}
+
+# find markers for every cluster compared to all remaining cells, report only the positive ones
+
+seurat_obj.markers <- FindAllMarkers(seurat_obj, only.pos = TRUE)
+seurat_obj.markers %>%
+    group_by(cluster) %>%
+    dplyr::filter(avg_log2FC > 1)
+
+```
+
+
+##################### tests for differential expression ########################
+
+
+```{r ROC_test}
+
+# Identify markers for cluster 0 using the ROC test
+  cluster0.markers <- FindMarkers(seurat_obj, ident.1 = 0, logfc.threshold = 0.25, test.use = "roc", only.pos = TRUE)
+
+
+```
+
+
+######################## visualize_marker_expression ########################### 
+
+
+```{r visualize_marker_expression}
+
+VlnPlot(seurat_obj, features = c("RPS12", "LEF1"))
+
+
+```
+
+
+
+############################# Annotation-Azimuth ###############################
+
+
+```{r}
+
+library(Azimuth)
+
+seurat_obj <- RunAzimuth(seurat_obj, reference = "pbmcref")
+
+```
+
+
+```{r}
+
+predicted.celltype.l1= c("CD4 T", "CD8 T", "other T", "B", "Mono", "NK", "other", "DC")
+broad.annotation= c("T", "T", "T", "B", "Mono", "NK", "other", "DC")
+ map <- setNames(broad.annotation, predicted.celltype.l1)
+
+
+seurat_obj@meta.data[["broad.annotation"]] <- map[seurat_obj[["predicted.celltype.l1"]] [, 1]]
+
+
+
+```
+
+
+```{r}
+
+seurat_obj@meta.data
+
+
+```
+
+
+```{r}
+
+DimPlot(seurat_obj, group.by = "broad.annotation")
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
