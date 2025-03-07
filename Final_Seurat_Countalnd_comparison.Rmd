@@ -1,0 +1,248 @@
+---
+title: "countland and Seurat"
+output: rmarkdown::github_document
+always_allow_html: true
+vignette: >
+  %\VignetteIndexEntry{countland and Seurat}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+
+
+Load the required packages
+
+```{r load,results=F,message=F}
+
+library(countland)
+library(dplyr)
+library(Seurat)
+library(networkD3)
+library(patchwork)
+library(Matrix)
+library(ggplot2)
+theme_set(theme_classic())
+
+```
+
+
+
+```{r seurat-init}
+
+gold.data <- Seurat::Read10X(data.dir = "/tank2/jpatel/CR_count_results/Pooled_Samples/4plex_subpool1_run1_count/outs/filtered_feature_bc_matrix")
+
+```
+
+
+
+```{r countland-init}
+C <- countland(gold.data,remove_empty=TRUE)
+C@names_genes <- gsub("_","-",C@names_genes) # set names equal to Seurat
+```
+
+
+
+```{r filter}
+gold <- CreateSeuratObject(counts = gold.data, project = "gold3k", min.cells = 3, min.features = 200)
+gold
+
+C <- ScoreCells(C)
+cell_filt <- C@cell_scores[C@cell_scores$n_features >= 200,]$names
+C <- SubsetCells(C,which(C@names_cells %in% cell_filt),remove_empty=FALSE)
+
+C <- ScoreGenes(C,subsample=FALSE)
+gene_filt <- C@gene_scores[C@gene_scores$n_cells >= 3,]$names
+C <- SubsetGenes(C,which(C@names_genes %in% gene_filt),remove_empty=FALSE)
+```
+
+
+
+```{r gene-string}
+#check for number of counts from a specific gene, here ending with "271254"
+gene_string <- "^MT-"
+
+C <- ScoreCells(C,gene_string)
+head(C@cell_scores)
+```
+
+
+```{r check_row_col}
+
+nrow(C@counts)
+ncol(C@counts)
+
+```
+
+
+
+```{r seurat-var}
+gold <- FindVariableFeatures(gold, selection.method = "vst", nfeatures = 2000)
+```
+
+
+
+```{r countland-var}
+C <- Subsample(C,cell_counts=300)
+C <- ScoreGenes(C,subsample=TRUE)
+head(C@gene_scores)
+```
+
+
+
+
+```{r countland-var-filt}
+C <- SubsetGenes(C, which(C@names_genes %in% rownames(gold)[gold@assays$RNA@meta.data$vf_vst_counts_variable]))
+
+```
+
+
+## Cluster cells
+
+```{r r seurat-cluster,countland-cluster,results=F,message=F}
+# Define a function to perform clustering for both Seurat and Countland
+perform_clustering <- function(gold, dims = 1:10, resolution = 0.15, 
+                               C, n_clusters = 7, n_components = 5) {
+  
+  # Seurat Clustering Workflow
+  gold <- NormalizeData(gold)
+  all.genes <- rownames(gold)
+  gold <- ScaleData(gold, features = all.genes)
+  gold <- RunPCA(gold, features = VariableFeatures(object = gold), verbose = FALSE)
+  gold <- FindNeighbors(gold, dims = dims)
+  gold <- FindClusters(gold, resolution = resolution)
+  gold <- RunUMAP(gold, dims = dims)
+  
+  # Countland Clustering Workflow
+  C <- Dot(C)
+  C <- Embed(C)
+  C <- Cluster(C, n_clusters = n_clusters, n_components = n_components)
+  
+  # Return results as a list
+  return(list(gold = gold, C = C))
+}
+```
+
+
+```{r Call_the_function}
+
+# Call the function using your dataset
+clustering_results <- perform_clustering(gold, dims = 1:10, resolution = 0.15, 
+                                         C, n_clusters = 7, n_components = 5)
+
+# Access results separately
+gold_output <- clustering_results$gold
+C_output <- clustering_results$C
+```
+
+
+
+```{r Azimuth_pbmcref}
+
+library(Azimuth)
+
+
+  
+gold <- RunAzimuth(gold, reference = "pbmcref")
+
+
+```
+
+
+```{r}
+## Recapitulate how we mapped fine grained celltype annotations onto broad annotations:
+predicted.celltype.l1= c("CD4 T", "CD8 T", "other T", "B", "Mono", "NK", "other", "DC")
+broad.annotation= c("T", "T", "T", "B", "Mono", "NK", "other", "DC")
+map <- setNames(broad.annotation, predicted.celltype.l1)
+map
+
+
+
+## A more clean version extracts the vector directly from @meta.data:
+gold@meta.data[["broad.annotation"]] <- map[ gold@meta.data |> pull(predicted.celltype.l1) ]
+
+```
+
+
+```{r}
+
+## Transferring the celltype annotations of a Seurat object to a countland object:
+
+## First we need to construct a mapping vector from the reference Seurat object.
+## Actually we can construct two mapping vectors, one for mapping cell names to broad celltypes, and one for mapping to the finer-grained predicted.celltype.l1.
+
+## The index vector (n in the introductory example above) will be the cell names, which is the rownames of seurat_obj@meta.data :
+n <- rownames(gold@meta.data)
+
+## The values we want to map to are either the broad annotations:
+v1 <- gold@meta.data |> pull(broad.annotation)
+## or the finer-grained annotations:
+v2 <- gold@meta.data |> pull(predicted.celltype.l1)
+
+## mapping vector for "cell names to broad annotation":
+map1 <- setNames(v1,n)
+## mapping vector for "cell names to finer-grained annotation":
+map2 <- setNames(v2,n)
+
+
+## The cell metadata of a countland object C are in C@cell_scores (a data.frame). The cell names are in column "names" of this table.
+
+## Set column "broad.annotation" in C@cell_scores:
+C@cell_scores[["broad.annotation"]] <- map1[ C@cell_scores[["names"]] ]
+## Set column ""predicted.celltype.l1" in C@cell_scores:
+C@cell_scores[["predicted.celltype.l1"]] <- map2[ C@cell_scores[["names"]] ]
+
+```
+
+
+## Visualize results
+
+Here we plot results using the UMAP embedding calculated in `Seurat`.
+
+```{r plot-seurat,fig.height=4,fig.width=15,fig.align="center"}
+
+cl_s <- paste0(gold@meta.data$seurat_clusters)
+cl_r <- paste0(gold@meta.data$orig.ident)
+cl_c <- paste0(as.character(C@cluster_labels))
+cl_b <- paste0(as.character(C@cell_scores[["broad.annotation"]]))
+cl_f <- (as.character(C@cell_scores[["predicted.celltype.l1"]]))
+values <- unique(c(cl_s,cl_c,cl_r,cl_b))
+color <- viridis::turbo(n=length(values))
+names(color) <- values
+
+u1 <- gold@reductions$umap@cell.embeddings[,1]
+u2 <- gold@reductions$umap@cell.embeddings[,2]
+gdf <- data.frame("component1" = u1, "component2" = u2, "real_label" = cl_r, "seurat_clusters" = cl_s, "countland_clusters" = cl_c, "countland_annotation" = cl_b, "predicted.celltype.l1" = cl_f)
+
+g1 <- ggplot(gdf,aes(x = component1, y = component2, color = seurat_clusters)) + geom_point(size=1) + theme("legend.position" = "top") + ggtitle("Seurat clustering")
+g2 <- ggplot(gdf,aes(x = component1, y = component2, color = countland_clusters)) + geom_point(size=1) +  theme("legend.position" = "top") + ggtitle("countland clustering")
+g3 <- ggplot(gdf,aes(x = component1, y = component2, color = predicted.celltype.l1)) + geom_point(size=1) + theme("legend.position" = "top") + ggtitle("ground truth")
+gridExtra::grid.arrange(g1,g2,g3,ncol=3)
+
+```
+
+
+
+
+```{r plot-spectral,fig.height=4,fig.width=15,fig.align="center"}
+u1 <- C@embedding[,2]
+u2 <- C@embedding[,3]
+gdf <- data.frame("component1" = u1, "component2" = u2, "real_label" = cl_r, "seurat_clusters" = cl_s, "countland_clusters" = cl_c, "countland_annotation" = cl_b)
+table(gdf$countland_annotation)
+
+g1 <- ggplot(gdf,aes(x = component1, y = component2, color = seurat_clusters)) + geom_point(size=1) +  theme("legend.position" = "top") + ggtitle("Seurat clustering") 
+g2 <- ggplot(gdf,aes(x = component1, y = component2, color = countland_clusters)) + geom_point(size=1) +  theme("legend.position" = "top") + ggtitle("countland clustering")
+g3 <- ggplot(gdf,aes(x = component1, y = component2, color = countland_annotation)) + geom_point(size=1)  + theme("legend.position" = "top") + ggtitle("ground truth")
+gridExtra::grid.arrange(g1,g2,g3,ncol=3)
+```
+
+
+
+
+
