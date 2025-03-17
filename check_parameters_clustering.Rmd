@@ -1,0 +1,517 @@
+---
+title: "Parameter check for countland and Seurat"
+output: rmarkdown::github_document
+always_allow_html: true
+vignette: >
+  %\VignetteIndexEntry{countland and Seurat}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+
+
+```{r load,results=F,message=F}
+
+library(countland)
+library(dplyr)
+library(Seurat)
+library(networkD3)
+library(patchwork)
+library(Matrix)
+library(ggplot2)
+library(umap)
+library(cluster)
+theme_set(theme_classic())
+
+```
+
+
+```{r seurat-init}
+
+gold.data <- Seurat::Read10X(data.dir = "/tank2/jpatel/CR_count_results/Pooled_Samples/4plex_subpool1_run1_count/outs/filtered_feature_bc_matrix")
+
+```
+
+
+```{r countland-init}
+C <- countland(gold.data,remove_empty=TRUE)
+C@names_genes <- gsub("_","-",C@names_genes) # set names equal to Seurat
+```
+
+
+```{r filter}
+gold <- CreateSeuratObject(counts = gold.data, project = "gold3k", min.cells = 3, min.features = 200)
+gold
+
+C <- ScoreCells(C)
+cell_filt <- C@cell_scores[C@cell_scores$n_features >= 200,]$names
+C <- SubsetCells(C,which(C@names_cells %in% cell_filt),remove_empty=FALSE)
+
+C <- ScoreGenes(C,subsample=FALSE)
+gene_filt <- C@gene_scores[C@gene_scores$n_cells >= 3,]$names
+C <- SubsetGenes(C,which(C@names_genes %in% gene_filt),remove_empty=FALSE)
+```
+
+
+
+```{r gene-string}
+
+# its counts are listed under `feature_match_counts`. Regular expressions are permitted for name matching.
+gene_string <- "^MT-"
+
+C <- ScoreCells(C,gene_string)
+head(C@cell_scores)
+```
+
+
+```{r seurat-var}
+gold <- FindVariableFeatures(gold, selection.method = "vst", nfeatures = 2000)
+```
+
+
+```{r countland-var}
+C <- Subsample(C,cell_counts=300)
+C <- ScoreGenes(C,subsample=TRUE)
+head(C@gene_scores)
+```
+
+
+```{r countland-var-filt}
+C <- SubsetGenes(C, which(C@names_genes %in% rownames(gold)[gold@assays$RNA@meta.data$vf_vst_counts_variable]))
+
+```
+
+
+```{r seurat-cluster,message=F}
+
+# Function to test different dims & resolution values
+test_seurat_parameters <- function(gold, dims_list, resolution_list) {
+  results <- data.frame(Dims = integer(), Resolution = numeric(), SilhouetteScore = numeric())
+  
+  for (dims in dims_list) {
+    for (res in resolution_list) {
+      # Run Seurat clustering
+      gold <- NormalizeData(gold)
+      all.genes <- rownames(gold)
+      gold <- ScaleData(gold, features = all.genes)
+      gold <- RunPCA(gold, features = VariableFeatures(object = gold), verbose=F)
+      gold <- FindNeighbors(gold, dims = dims)
+      gold <- FindClusters(gold, resolution = res)
+      gold <- RunUMAP(gold, dims = dims)
+      
+      # Compute Silhouette Score
+      sil_score <- mean(cluster::silhouette(as.numeric(gold$seurat_clusters), dist(gold@reductions$pca@cell.embeddings))[,3])
+      
+      # Store results
+      results <- rbind(results, data.frame(Dims = dims, Resolution = res, SilhouetteScore = sil_score))
+    }
+  }
+  
+  return(results)
+}
+
+# Define the dims and resolution values to test
+dims_to_test <-  list(c(1:5), c(1:7), c(1:10))  # modify based on dataset size
+resolution_to_test <- seq(0.05, 1, by = 0.05)  # Resolution range
+
+# Run the parameter testing function
+seurat_results <- test_seurat_parameters(gold, dims_to_test, resolution_to_test)
+
+# View results sorted by best Silhouette Score
+seurat_results <- seurat_results %>% arrange(desc(SilhouetteScore))
+print(seurat_results)
+
+```
+
+
+```{r}
+print(dim(gold@assays$RNA@counts))  # (genes, cells)
+
+```
+
+
+```{r}
+# Function to test different dims & resolution values
+test_seurat_parameters <- function(gold_data, dims_list, resolution_list) {
+  results <- data.frame(Dims = integer(), Resolution = numeric(), SilhouetteScore = numeric())
+  
+  for (dims in dims_list) {
+    for (res in resolution_list) {
+      # Convert gold_data to Seurat object
+      gold <- CreateSeuratObject(counts = gold_data, project = "gold3k", min.cells = 3, min.features = 200)
+      gold <- NormalizeData(gold)
+      all.genes <- rownames(gold)
+      gold <- ScaleData(gold, features = all.genes)
+      gold <- RunPCA(gold, features = VariableFeatures(object = gold), verbose=F)
+      gold <- FindNeighbors(gold, dims = dims)
+      gold <- FindClusters(gold, resolution = res)
+      gold <- RunUMAP(gold, dims = dims)
+      
+      # Compute Silhouette Score
+      sil_score <- mean(cluster::silhouette(as.numeric(gold$seurat_clusters), dist(gold@reductions$umap@cell.embeddings))[,3])
+      
+      # Store results
+      results <- rbind(results, data.frame(Dims = paste(dims, collapse = ","), Resolution = res, SilhouetteScore = sil_score))
+    }
+  }
+  
+  return(results)
+}
+
+# Define the dims and resolution values to test
+dims_to_test <- list(c(1:5), c(1:7), c(1:10))  # modify based on dataset size
+resolution_to_test <- seq(0.05, 1, by = 0.05)  # Resolution range
+
+# Run the parameter testing function
+seurat_results <- test_seurat_parameters(gold.data, dims_to_test, resolution_to_test)
+
+# View results sorted by best Silhouette Score
+seurat_results <- seurat_results %>% arrange(desc(SilhouetteScore))
+print(seurat_results)
+
+```
+
+
+________________________________________________________________________________
+________________________________________________________________________________
+________________________________________________________________________________
+
+
+
+
+```{r}
+# Function to evaluate different Seurat parameter combinations
+evaluate_seurat_parameters <- function(gold_data, 
+                                       dims_range = list(c(1:5), c(1:7), c(1:10), c(1:15)),
+                                       resolution_range = seq(0.05, 1, by = 0.05)) {
+  
+  library(Seurat)
+  library(cluster)  # For silhouette score
+  library(dplyr)
+  
+  # Create an empty data frame to store results
+  results_df <- data.frame(
+    dims = character(),
+    resolution = numeric(),
+    n_clusters = integer(),
+    avg_silhouette = numeric(),
+    stringsAsFactors = FALSE
+  )
+  
+  # Create and preprocess Seurat object (once)
+  gold <- CreateSeuratObject(counts = gold_data, project = "gold3k", min.cells = 3, min.features = 200)
+  gold <- NormalizeData(gold)
+  gold <- FindVariableFeatures(gold, selection.method = "vst", nfeatures = 2000)
+  gold <- ScaleData(gold, features = rownames(gold))
+  gold <- RunPCA(gold, features = VariableFeatures(object = gold), verbose = FALSE)
+  
+  # Loop through each combination of dims and resolution
+  for (dims in dims_range) {
+    dims_str <- paste0(min(dims), "-", max(dims))
+    cat(paste0("Testing dims ", dims_str, "\n"))
+    
+    # Find neighbors (needs to be done once per dims setting)
+    gold <- FindNeighbors(gold, dims = dims)
+    
+    for (res in resolution_range) {
+      cat(paste0("  Resolution: ", res, "\n"))
+      
+      # Find clusters with current resolution
+      gold <- FindClusters(gold, resolution = res)
+      
+      # Get number of clusters
+      n_clusters <- length(unique(gold$seurat_clusters))
+      
+      # Calculate silhouette score
+      # First, get PCA embeddings
+      pca_embeddings <- gold@reductions$pca@cell.embeddings[, dims]
+      
+      # Calculate silhouette score if we have more than 1 cluster
+      avg_silhouette <- NA
+      if (n_clusters > 1) {
+        sil <- silhouette(as.numeric(gold$seurat_clusters), dist(pca_embeddings))
+        avg_silhouette <- mean(sil[, "sil_width"])
+      }
+      
+      # Add results to dataframe
+      results_df <- rbind(results_df, data.frame(
+        dims = dims_str,
+        resolution = res,
+        n_clusters = n_clusters,
+        avg_silhouette = avg_silhouette
+      ))
+    }
+  }
+  
+  # Sort results by silhouette score
+  results_df <- results_df %>% arrange(desc(avg_silhouette))
+  
+  return(list(
+    seurat_obj = gold,
+    parameter_results = results_df
+  ))
+}
+```
+
+
+
+```{r}
+# Example usage:
+# First, load the data
+ gold_data <- Seurat::Read10X(data.dir = "/tank2/jpatel/CR_count_results/Pooled_Samples/4plex_subpool1_run1_count/outs/filtered_feature_bc_matrix")
+
+```
+
+
+```{r}
+# Run the parameter evaluation
+seurat_eval <- evaluate_seurat_parameters(gold_data)
+
+# View the top results
+head(seurat_eval$parameter_results, 20)
+
+# Find the top 5 parameter combinations
+top_params <- head(seurat_eval$parameter_results, 5)
+print(top_params)
+```
+
+
+
+```{r}
+plot_parameter_results <- function(results_df) {
+  library(ggplot2)
+  
+  # Create a heatmap of silhouette scores
+  heatmap_plot <- ggplot(results_df, aes(x = dims, y = resolution, fill = avg_silhouette)) +
+    geom_tile() +
+    scale_fill_viridis_c() +
+    labs(title = "Silhouette Scores for Parameter Combinations",
+         x = "Dimensions Range", 
+         y = "Resolution",
+         fill = "Avg Silhouette") +
+    theme_minimal()
+  
+  # Create a scatter plot of silhouette scores vs number of clusters
+  scatter_plot <- ggplot(results_df, aes(x = n_clusters, y = avg_silhouette, color = resolution)) +
+    geom_point(size = 3, alpha = 0.7) +
+    facet_wrap(~dims) +
+    labs(title = "Silhouette Score vs Number of Clusters",
+         x = "Number of Clusters", 
+         y = "Average Silhouette Score") +
+    theme_minimal()
+  
+  return(list(
+    heatmap = heatmap_plot,
+    scatter = scatter_plot
+  ))
+}
+
+# Usage:
+plots <- plot_parameter_results(seurat_eval$parameter_results)
+plots$heatmap
+plots$scatter
+```
+
+
+
+?silhouette
+
+
+********************************************************************************
+********************************************************************************
+
+######### Used code from here!!!!!
+
+
+________________________________________________________________________________
+________________________________________________________________________________
+________________________________________________________________________________
+
+
+
+```{r}
+# Example usage:
+# First, load the data
+ gold_data <- Seurat::Read10X(data.dir = "/tank2/jpatel/CR_count_results/Pooled_Samples/4plex_subpool1_run1_count/outs/filtered_feature_bc_matrix")
+
+```
+
+
+```{r}
+# Simple function to test different Seurat clustering parameters
+test_seurat_parameters <- function(gold_data) {
+  # Load libraries we need
+  library(Seurat)
+  library(cluster)
+  library(ggplot2)
+  library(dplyr)
+  
+  # Create empty data frame to store results
+  results <- data.frame(
+    dims = numeric(),
+    resolution = numeric(),
+    silhouette_score = numeric()
+  )
+  
+  # Set up dimensions to test - from 2 up to 10 dimensions 
+  # (Starting from 2 because UMAP needs at least 2 dimensions)
+  dims_to_test <- 2:10
+  
+  # Set up resolutions to test - from 0.05 to 1 with 0.05 steps
+  resolutions_to_test <- seq(0.05, 1, by = 0.05)
+  
+  # Loop through each dimension
+  for (d in dims_to_test) {
+    print(paste("Testing dimensions 1:", d))
+    
+    # Loop through each resolution
+    for (r in resolutions_to_test) {
+      print(paste("  Testing resolution:", r))
+      
+      # Create Seurat object
+      gold <- CreateSeuratObject(counts = gold_data, project = "gold3k", min.cells = 3, min.features = 200)
+      
+      # Basic Seurat workflow
+      gold <- NormalizeData(gold)
+      gold <- FindVariableFeatures(gold, selection.method = "vst", nfeatures = 2000)
+      gold <- ScaleData(gold)
+      gold <- RunPCA(gold, features = VariableFeatures(object = gold), verbose = FALSE)
+      
+      # This is where we use our test parameters
+      gold <- FindNeighbors(gold, dims = 1:d)
+      gold <- FindClusters(gold, resolution = r)
+      
+      # For UMAP, we need at least 2 dimensions
+      umap_dims <- if(d == 1) 1:2 else 1:d
+      gold <- RunUMAP(gold, dims = umap_dims)
+      
+      # Try to calculate silhouette score with error handling
+      tryCatch({
+        # Get the PCA embedding
+        pca_embedding <- gold@reductions$pca@cell.embeddings[, 1:d]
+        
+        # Get cluster assignments
+        clusters <- as.numeric(gold@meta.data$seurat_clusters)
+        
+        # Calculate silhouette score
+        sil <- silhouette(clusters, dist(pca_embedding))
+        mean_sil <- mean(sil[,3])
+        
+        # Add result to our data frame
+        results <- rbind(results, data.frame(
+          dims = d,
+          resolution = r,
+          silhouette_score = mean_sil
+        ))
+        
+        print(paste("    Silhouette score:", round(mean_sil, 4)))
+      }, error = function(e) {
+        # If there's an error, print a message and continue
+        print(paste("    Error calculating silhouette for dims =", d, "and resolution =", r))
+        print(paste("    Error message:", e$message))
+      })
+    }
+  }
+  
+  # Find the top 10 parameter combinations
+  top_results <- results %>%
+    arrange(desc(silhouette_score)) %>%
+    head(10)
+  
+  # Simple plot of results
+  heatmap <- ggplot(results, aes(x = dims, y = resolution, fill = silhouette_score)) +
+    geom_tile() +
+    scale_fill_gradient(low = "blue", high = "red") +
+    labs(title = "Silhouette Scores for Different Parameter Combinations",
+         x = "Number of Dimensions",
+         y = "Resolution") +
+    theme_minimal()
+  
+  # Return results
+  return(list(
+    all_results = results,
+    top_results = top_results,
+    heatmap = heatmap
+  ))
+}
+
+
+```
+
+
+```{r}
+# Run the parameter testing
+parameter_test <- test_seurat_parameters(gold_data)
+
+# View all results
+View(parameter_test$all_results)
+
+# See the top 10 parameter combinations
+View(parameter_test$top_results)
+
+```
+
+
+
+```{r}
+  # Simple plot of results
+  heatmap <- ggplot(results, aes(x = dims, y = resolution, fill = silhouette_score)) +
+    geom_tile() +
+    scale_fill_gradient(low = "blue", high = "red") +
+    labs(title = "Silhouette Scores for Different Parameter Combinations",
+         x = "Number of Dimensions",
+         y = "Resolution") +
+    theme_minimal()
+```
+
+
+
+```{r}
+parameter_test$heatmap
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
