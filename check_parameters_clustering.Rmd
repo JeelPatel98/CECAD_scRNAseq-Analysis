@@ -481,6 +481,195 @@ parameter_test$heatmap
 
 
 
+********************************************************************************
+********************************************************************************
+********************************************************************************
+
+
+############################ parameters for Countland ##########################
+
+
+```{r}
+# Example usage:
+# First, load the data
+ gold_data <- Seurat::Read10X(data.dir = "/tank2/jpatel/CR_count_results/Pooled_Samples/4plex_subpool1_run1_count/outs/filtered_feature_bc_matrix")
+
+```
+
+
+
+
+```{r}
+# Function to test different Countland clustering parameters
+test_countland_parameters <- function(gold_data) {
+  # Load libraries we need
+  library(countland)
+  library(cluster)
+  library(ggplot2)
+  library(dplyr)
+  library(Matrix)
+  
+  # Create empty data frame to store results
+  results <- data.frame(
+    embed_components = numeric(),
+    cluster_components = numeric(),
+    n_clusters = numeric(),
+    silhouette_score = numeric()
+  )
+  
+  # Based on scree plot, embedding components should be small (2-3)
+  embed_components_to_test <- 2:3
+  
+  # Clustering components can be tested in a wider range
+  cluster_components_to_test <- 3:8
+  
+  # Set up clusters to test - range from 2-10 clusters
+  clusters_to_test <- 2:8
+  
+  # Initialize countland object (only need to do this once)
+  print("Initializing Countland object...")
+  C <- countland(gold_data, remove_empty = TRUE)
+  C@names_genes <- gsub("_", "-", C@names_genes) # set names equal to Seurat
+  
+  # Filter cells in countland
+  C <- ScoreCells(C)
+  cell_filt <- C@cell_scores[C@cell_scores$n_features >= 200,]$names
+  C <- SubsetCells(C, which(C@names_cells %in% cell_filt), remove_empty = FALSE)
+  
+  # Score and filter genes in countland
+  C <- ScoreGenes(C, subsample = FALSE)
+  gene_filt <- C@gene_scores[C@gene_scores$n_cells >= 3,]$names
+  C <- SubsetGenes(C, which(C@names_genes %in% gene_filt), remove_empty = FALSE)
+  
+  # Score cells for mitochondrial genes
+  gene_string <- "^MT-"
+  C <- ScoreCells(C, gene_string)
+  
+  # Subsample and score genes in countland
+  C <- Subsample(C, cell_counts = 300)
+  C <- ScoreGenes(C, subsample = TRUE)
+  
+
+  # Apply Dot product transformation (this is a prerequisite for Embed)
+  print("Applying Dot product transformation...")
+  C <- Dot(C)
+  
+  # Loop through embedding component values
+  for (embed_comp in embed_components_to_test) {
+    print(paste("Testing embedding components =", embed_comp))
+    
+    # Apply embedding with current number of components
+    C_embedded <- Embed(C, n_components = embed_comp)
+    
+    # Loop through clustering component values
+    for (cluster_comp in cluster_components_to_test) {
+      print(paste("  Testing clustering components =", cluster_comp))
+      
+      # Loop through each cluster value
+      for (clust in clusters_to_test) {
+        print(paste("    Testing n_clusters =", clust))
+        
+        # Try to cluster and calculate silhouette score with error handling
+        tryCatch({
+          # Cluster using current parameters
+          C_clustered <- Cluster(C_embedded, n_clusters = clust, n_components = cluster_comp)
+          
+          # Get the embedding and cluster labels for silhouette calculation
+          # We use the embedding produced by Cluster() with n_components = cluster_comp
+          embedding <- C_clustered@embedding[, 1:min(cluster_comp, ncol(C_clustered@embedding))]
+          clusters <- as.numeric(C_clustered@cluster_labels)
+          
+          # Calculate silhouette score
+          sil <- silhouette(clusters, dist(embedding))
+          mean_sil <- mean(sil[,3])
+          
+          # Add result to our data frame
+          results <- rbind(results, data.frame(
+            embed_components = embed_comp,
+            cluster_components = cluster_comp,
+            n_clusters = clust,
+            silhouette_score = mean_sil
+          ))
+          
+          print(paste("      Silhouette score:", round(mean_sil, 4)))
+        }, error = function(e) {
+          # If there's an error, print a message and continue
+          print(paste("      Error with parameters: embed_comp =", embed_comp, 
+                      "cluster_comp =", cluster_comp, "clust =", clust))
+          print(paste("      Error message:", e$message))
+        })
+      }
+    }
+  }
+  
+  # Find the top 10 parameter combinations
+  top_results <- results %>%
+    arrange(desc(silhouette_score)) %>%
+    head(10)
+  
+  # Create visualizations for the best embedding component value
+  best_embed_comp <- top_results$embed_components[1]
+  best_results <- results %>% filter(embed_components == best_embed_comp)
+  
+  # Create a heatmap for the best embedding dimension
+  heatmap <- ggplot(best_results, 
+                   aes(x = cluster_components, y = n_clusters, fill = silhouette_score)) +
+    geom_tile() +
+    scale_fill_gradient(low = "blue", high = "red") +
+    labs(title = paste("Countland Silhouette Scores (Embed Components =", best_embed_comp, ")"),
+         x = "Clustering Components",
+         y = "Number of Clusters") +
+    theme_minimal()
+  
+  # Create a line plot showing effect of clustering components
+  comp_plot <- ggplot(best_results %>% 
+                     group_by(cluster_components) %>% 
+                     summarize(mean_silhouette = mean(silhouette_score)),
+                   aes(x = cluster_components, y = mean_silhouette)) +
+    geom_line() +
+    geom_point() +
+    labs(title = paste("Effect of Clustering Components (Embed Components =", best_embed_comp, ")"),
+         x = "Clustering Components",
+         y = "Mean Silhouette Score") +
+    theme_minimal()
+  
+  # Create a line plot showing effect of number of clusters
+  clust_plot <- ggplot(best_results %>% 
+                      group_by(n_clusters) %>% 
+                      summarize(mean_silhouette = mean(silhouette_score)),
+                    aes(x = n_clusters, y = mean_silhouette)) +
+    geom_line() +
+    geom_point() +
+    labs(title = paste("Effect of Number of Clusters (Embed Components =", best_embed_comp, ")"),
+         x = "Number of Clusters",
+         y = "Mean Silhouette Score") +
+    theme_minimal()
+  
+  # Return the results
+  return(list(
+    all_results = results,
+    top_results = top_results,
+    heatmap = heatmap,
+    component_plot = comp_plot,
+    cluster_plot = clust_plot
+  ))
+}
+
+
+```
+
+
+
+```{r}
+# Run the parameter testing for Countland
+countland_test <- test_countland_parameters(gold_data)
+
+# View all results
+View(countland_test$all_results)
+
+# See the top 10 parameter combinations
+View(countland_test$top_results)
+```
 
 
 
