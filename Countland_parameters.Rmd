@@ -1,8 +1,22 @@
+---
+title: "Parameter check for countland"
+output: rmarkdown::github_document
+always_allow_html: true
+---
 
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
 
+```{r}
 
+# First, load the data
+ gold_data <- Seurat::Read10X(data.dir = "/tank2/jpatel/CR_count_results/Pooled_Samples/4plex_subpool1_run1_count/outs/filtered_feature_bc_matrix")
 
-
+```
 
 
 
