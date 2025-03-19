@@ -1,0 +1,134 @@
+
+
+
+
+
+
+
+
+```{r}
+
+# Function to test different Countland clustering parameters
+test_countland_parameters <- function(gold_data) {
+  # Load libraries we need
+  library(countland)
+  library(cluster)
+  library(ggplot2)
+  library(dplyr)
+  library(Matrix)
+  
+  # Create empty data frame to store results
+  results <- data.frame(
+    n_components = numeric(),
+    n_clusters = numeric(),
+    silhouette_score = numeric()
+  )
+  
+  # Set up components to test - range from 2 to 5 
+  components_to_test <- 2:5
+  
+  # Set up clusters to test - range from 2 to 8 
+  clusters_to_test <- 2:8
+  
+  # Initialize countland object
+  print("Initializing Countland object...")
+  C <- countland(gold_data, remove_empty = TRUE)
+  C@names_genes <- gsub("_", "-", C@names_genes) # set names equal to Seurat
+  
+  # Filter cells in countland
+  C <- ScoreCells(C)
+  cell_filt <- C@cell_scores[C@cell_scores$n_features >= 200,]$names
+  C <- SubsetCells(C, which(C@names_cells %in% cell_filt), remove_empty = FALSE)
+  
+  # Score and filter genes in countland
+  C <- ScoreGenes(C, subsample = FALSE)
+  gene_filt <- C@gene_scores[C@gene_scores$n_cells >= 3,]$names
+  C <- SubsetGenes(C, which(C@names_genes %in% gene_filt), remove_empty = FALSE)
+  
+  # Score cells for mitochondrial genes
+  gene_string <- "^MT-"
+  C <- ScoreCells(C, gene_string)
+  
+  # Subsample and score genes in countland
+  C <- Subsample(C, cell_counts = 300)
+  C <- ScoreGenes(C, subsample = TRUE)
+  
+  # Apply Dot product transformation
+  print("Applying Dot product transformation...")
+  C <- Dot(C)
+  
+  # Loop through each component value
+  for (comp in components_to_test) {
+    print(paste("Testing n_components =", comp))
+    
+    # Apply embedding with current number of components
+    # Using same components value for embedding 
+    C_embedded <- Embed(C, n_components = comp)
+    
+    # Loop through each cluster value
+    for (clust in clusters_to_test) {
+      print(paste("  Testing n_clusters =", clust))
+      
+      # Cluster using current parameters
+      # Using same components value for clustering 
+      C_clustered <- Cluster(C_embedded, n_clusters = clust, n_components = comp)
+      
+      # Get the embedding and cluster labels
+      embedding <- C_clustered@embedding[, 2:comp]
+      clusters <- as.numeric(C_clustered@cluster_labels)
+      
+      # Calculate silhouette score 
+      sil <- silhouette(clusters, dist(embedding))
+      mean_sil <- mean(sil[,3])
+      
+      # Add result to our data frame
+      results <- rbind(results, data.frame(
+        n_components = comp,
+        n_clusters = clust,
+        silhouette_score = mean_sil
+      ))
+      
+      print(paste("    Silhouette score:", round(mean_sil, 4)))
+    }
+  }
+  
+  # Find the top 10 parameter combinations
+  top_results <- results %>%
+    arrange(desc(silhouette_score)) %>%
+    head(10)
+  
+  # Create a simple heatmap visualization of the results
+  heatmap <- ggplot(results, aes(x = n_components, y = n_clusters, fill = silhouette_score)) +
+    geom_tile() +
+    scale_fill_gradient(low = "blue", high = "red") +
+    labs(title = "Countland Silhouette Scores",
+         x = "Number of Components",
+         y = "Number of Clusters") +
+    theme_minimal()
+  
+  
+  # Return the results
+  return(list(
+    all_results = results,
+    top_results = top_results,
+    heatmap = heatmap
+  ))
+}
+
+
+```
+
+
+
+```{r}
+
+countland_test <- test_countland_parameters(gold_data)
+
+```
+
+
+```{r}
+ #View(countland_test$all_results)
+View(countland_test$top_results)
+# countland_test$heatmap
+```
