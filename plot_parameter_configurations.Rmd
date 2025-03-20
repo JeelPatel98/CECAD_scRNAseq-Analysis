@@ -1,0 +1,183 @@
+---
+title: "plot_Run1_4plex_pooled"
+output: rmarkdown::github_document
+always_allow_html: true
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+
+```{r}
+
+
+# Function to perform clustering analysis with adjustable parameters
+run_clustering_analysis <- function(gold.data, 
+                                   dims = 1:3, 
+                                   resolution = 0.05) {
+                              
+  
+  # Load required libraries
+  library(countland)
+  library(dplyr)
+  library(Seurat)
+  library(networkD3)
+  library(patchwork)
+  library(Matrix)
+  library(ggplot2)
+  library(Azimuth)
+  library(gridExtra)
+  library(cluster) 
+  library(umap)
+  
+  # Set theme
+  theme_set(theme_classic())
+  
+  # Create Seurat object
+  gold <- CreateSeuratObject(counts = gold.data, project = "gold3k", min.cells = 3, min.features = 200)
+  
+  # The [[ operator can add columns to object metadata. This is a great place to stash QC stats
+  gold[["percent.mt"]] <- PercentageFeatureSet(gold, pattern = "^MT-")
+  
+  gold[["nFeature_RNA"]] <- gold$nFeature_RNA
+  gold[["nCount_RNA"]] <- gold$nCount_RNA
+  
+  #filter the cells - unique feature counts over 2,500 or less than 200, >5% mitochondrial counts
+  gold <- subset(gold, subset = nFeature_RNA > 200 & nFeature_RNA < 2500 & percent.mt < 5)
+  
+  # Find variable features in Seurat
+  gold <- FindVariableFeatures(gold, selection.method = "vst", nfeatures = 2000)
+  
+  # Seurat Clustering Workflow
+  gold <- NormalizeData(gold)
+  all.genes <- rownames(gold)
+  gold <- ScaleData(gold, features = all.genes)
+  gold <- RunPCA(gold, features = VariableFeatures(object = gold), verbose = FALSE)
+  gold <- FindNeighbors(gold, dims = dims)
+  gold <- FindClusters(gold, resolution = resolution)
+  gold <- RunUMAP(gold, dims = dims)
+  
+  
+  # Run Azimuth for cell type annotation
+  gold <- RunAzimuth(gold, reference = "pbmcref")
+  
+  # Create broad cell type annotations
+  predicted.celltype.l1 <- c("CD4 T", "CD8 T", "other T", "B", "Mono", "NK", "other", "DC")
+  broad.annotation <- c("T", "T", "T", "B", "Mono", "NK", "other", "DC")
+  map <- setNames(broad.annotation, predicted.celltype.l1)
+  
+  
+  # Add broad annotations to Seurat metadata
+  gold@meta.data[["broad.annotation"]] <- map[gold@meta.data |> pull(predicted.celltype.l1)]
+  
+  
+  # Create data for visualization
+  cl_s <- paste0(gold@meta.data$seurat_clusters)
+  cl_r <- paste0(gold@meta.data$orig.ident)
+  cl_b <- paste0(as.character(gold@meta.data[["broad.annotation"]]))
+  cl_f <- (as.character(gold@meta.data[["predicted.celltype.l1"]]))
+  values <- unique(c(cl_s, cl_r, cl_b, cl_f))
+  color <- viridis::turbo(n = length(values))
+  names(color) <- values
+  
+  # Visualize results using Seurat UMAP
+  u1 <- gold@reductions$umap@cell.embeddings[,1]
+  u2 <- gold@reductions$umap@cell.embeddings[,2]
+  gdf_seurat <- data.frame(
+    "component1" = u1, 
+    "component2" = u2, 
+    "real_label" = cl_r, 
+    "seurat_clusters" = cl_s, 
+    "seurat_annotation" = cl_b, 
+    "predicted.celltype.l1" = cl_f
+  )
+  
+  
+
+  # Return all relevant objects and data frames
+  results <- list(
+    seurat_obj = gold,
+    seurat_umap_data = gdf_seurat)
+  
+    parameters = list(
+      dims = dims,
+      resolution = resolution)
+  
+  
+  return(results)
+
+
+}
+
+```
+
+
+
+```{r}
+# Example usage:
+# First, load the data
+ gold.data <- Seurat::Read10X(data.dir = "/tank2/jpatel/CR_count_results/Pooled_Samples/4plex_subpool1_run1_count/outs/filtered_feature_bc_matrix")
+
+```
+
+
+
+```{r}
+# Or run with custom parameters
+ results <- run_clustering_analysis(gold.data, 
+                                   dims = 1:3, 
+                                   resolution = 0.05)
+                            
+
+```
+
+
+```{r}
+# Access the results
+seurat_obj <- results$seurat_obj
+umap_data <- results$seurat_umap_data
+
+```
+
+
+```{r}
+
+  # Plot Seurat UMAP results
+  g1 <- ggplot(umap_data, 
+               aes(x = component1, y = component2, color = predicted.celltype.l1)) + 
+    geom_point(size = 1) + 
+    theme(legend.position = "top") + 
+    ggtitle("Seurat clustering")
+  
+```
+
+
+
+```{r fig.height=4,fig.width=15,fig.align="center"}
+# Example for plotting:
+ plot(g1)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
