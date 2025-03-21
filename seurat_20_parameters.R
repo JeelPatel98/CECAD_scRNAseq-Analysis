@@ -39,21 +39,3 @@ print(selected_20)
 
 #############################################################
 #############################################################
-
-# Select 20 additional parameters using tier-based selection
-top_tier <- df_remaining %>% slice(1:7)   # Best scores
-mid_tier <- df_remaining %>% slice(8:14)  # Medium scores
-low_tier <- df_remaining %>% slice(15:20) # Lower scores
-
-# Combine all selected
-selected_20 <- bind_rows(top_tier, mid_tier, low_tier)
-
-# Display the selected parameters
-print(selected_20)
-
-# Save selection for reference
-write.csv(selected_20, "selected_20_seurat_params.csv", row.names = FALSE)
-
-
-colnames(df)
-
