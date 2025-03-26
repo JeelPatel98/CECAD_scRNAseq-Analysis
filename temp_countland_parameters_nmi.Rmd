@@ -1,0 +1,260 @@
+---
+  title: "Parameter check for countland and Seurat"
+output: rmarkdown::github_document
+always_allow_html: true
+vignette: >
+  %\VignetteIndexEntry{countland and Seurat}
+%\VignetteEngine{knitr::rmarkdown}
+%\VignetteEncoding{UTF-8}
+---
+  
+  ```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+
+
+```{r}
+# Example usage:
+# First, load the data
+gold_data <- Seurat::Read10X(data.dir = "/tank2/jpatel/CR_count_results/Pooled_Samples/4plex_subpool1_run1_count/outs/filtered_feature_bc_matrix")
+
+```
+
+
+```{r}
+
+# Function to test different Countland clustering parameters
+test_countland_parameters <- function(gold_data) {
+  # Load libraries we need
+  library(countland)
+  library(cluster)
+  library(ggplot2)
+  library(dplyr)
+  library(Matrix)
+  library(aricode)
+  library(Azimuth)
+  library(Seurat)
+  library(networkD3)
+  library(patchwork)
+  library(ggplot2)
+  library(gridExtra)
+  library(umap)
+  
+  # Create empty data frame to store results
+  results <- data.frame(
+    n_components = numeric(),
+    n_clusters = numeric(),
+    silhouette_score = numeric(),
+    silhouette_sd = numeric()
+  )
+  
+  # Set up components to test - range from 3 to 5 
+  components_to_test <- 3:5
+  
+  # Set up clusters to test - range from 2 to 8 
+  clusters_to_test <- 2:8
+  
+  # Initialize countland object
+  print("Initializing Countland object...")
+  C <- countland(gold_data, remove_empty = TRUE)
+  C@names_genes <- gsub("_", "-", C@names_genes) # set names equal to Seurat
+  
+  # Create Seurat object
+  gold <- CreateSeuratObject(counts = gold_data, project = "gold3k", min.cells = 3, min.features = 200)
+  
+  # Filter cells in countland
+  C <- ScoreCells(C)
+  cell_filt <- C@cell_scores[C@cell_scores$n_features >= 200,]$names
+  C <- SubsetCells(C, which(C@names_cells %in% cell_filt), remove_empty = FALSE)
+  
+  # Score and filter genes in countland
+  C <- ScoreGenes(C, subsample = FALSE)
+  gene_filt <- C@gene_scores[C@gene_scores$n_cells >= 3,]$names
+  C <- SubsetGenes(C, which(C@names_genes %in% gene_filt), remove_empty = FALSE)
+  
+  # Score cells for mitochondrial genes
+  gene_string <- "^MT-"
+  C <- ScoreCells(C, gene_string)
+  
+  # Find variable features in Seurat
+  gold <- FindVariableFeatures(gold, selection.method = "vst", nfeatures = 2000)
+  
+  # Subsample and score genes in countland
+  C <- Subsample(C,cell_counts='min')
+  C <- ScoreGenes(C, subsample = TRUE)
+  
+  # Subset genes in countland to match Seurat variable features
+  C <- SubsetGenes(C, which(C@names_genes %in% rownames(gold)[gold@assays$RNA@meta.data$vf_vst_counts_variable]))
+  
+  # Seurat Clustering Workflow
+  gold <- NormalizeData(gold)
+  all.genes <- rownames(gold)
+  gold <- ScaleData(gold, features = all.genes)
+  gold <- RunPCA(gold, features = VariableFeatures(object = gold), verbose = FALSE)
+  gold <- FindNeighbors(gold, dims = 1:6)
+  gold <- FindClusters(gold, resolution = 0.05)
+  gold <- RunUMAP(gold, dims = 1:6)
+  
+  # Apply Dot product transformation
+  print("Applying Dot product transformation...")
+  C <- Dot(C)
+  
+  # Run Azimuth for cell type annotation
+  gold <- RunAzimuth(gold, reference = "pbmcref")
+  
+  # Create broad cell type annotations
+  predicted.celltype.l1 <- c("CD4 T", "CD8 T", "other T", "B", "Mono", "NK", "other", "DC")
+  broad.annotation <- c("T", "T", "T", "B", "Mono", "NK", "other", "DC")
+  map <- setNames(broad.annotation, predicted.celltype.l1)
+  
+  # Add broad annotations to Seurat metadata
+  gold@meta.data[["broad.annotation"]] <- map[gold@meta.data |> pull(predicted.celltype.l1)]
+  
+  # Add predicted.celltype.l2 from Seurat to countland
+  df <- gold@meta.data[, c("predicted.celltype.l1", "predicted.celltype.l2")]
+  map2 <- setNames(df$predicted.celltype.l2, rownames(df))
+  
+  # Transfer cell type annotations from Seurat to countland
+  n <- rownames(gold@meta.data)
+  v1 <- gold@meta.data |> pull(broad.annotation)
+  v2 <- gold@meta.data |> pull(predicted.celltype.l1)
+  
+  map1 <- setNames(v1, n)
+  map2 <- setNames(v2, n)
+  
+  nmi_countland <- list()
+  
+  # Loop through each component value
+  for (comp in components_to_test) {
+    print(paste("Testing n_components =", comp))
+    
+    # Apply embedding with current number of components
+    # Using same components value for embedding 
+    C_embedded <- Embed(C, n_components = comp)
+    
+    # Loop through each cluster value
+    for (clust in clusters_to_test) {
+      print(paste("  Testing n_clusters =", clust))
+      
+      # Cluster using current parameters
+      # Using same components value for clustering 
+      C_clustered <- Cluster(C_embedded, n_clusters = clust, n_components = comp)
+      
+      # Add cell annotations
+      C@cell_scores[["broad.annotation"]] <- map1[C@cell_scores[["names"]]]
+      C@cell_scores[["predicted.celltype.l1"]] <- map2[C@cell_scores[["names"]]]
+      C@cell_scores[["predicted.celltype.l2"]] <- map2[C@cell_scores[["names"]]]
+      
+      # Create data for visualization
+      cl_r <- paste0(rep("gold3k", length(C@cell_scores$names)))
+      cl_c <- paste0(as.character(C@cluster_labels))
+      cl_b <- paste0(as.character(C@cell_scores[["broad.annotation"]]))
+      cl_f <- as.character(C@cell_scores[["predicted.celltype.l1"]])
+      cl_g <- as.character(C@cell_scores[["predicted.celltype.l2"]])
+      
+      
+      nmi_countland[[paste0("dim_", comp, "_clust_", clust)]] <- NMI(C_clustered@cluster_labels %>% unlist %>% as.vector(), C@cell_scores$broad.annotation %>% unlist %>% as.vector()) 
+      
+      # Get the embedding and cluster labels
+      embedding <- C_clustered@embedding[, 2:comp]
+      clusters <- as.numeric(C_clustered@cluster_labels)
+      
+      # Calculate silhouette score and standard deviation 
+      sil <- silhouette(clusters, dist(embedding))
+      mean_sil <- mean(sil[,3])
+      sd_sil <- sd(sil[,3])
+      
+      
+      
+      # Add result to our data frame
+      results <- rbind(results, data.frame(
+        n_components = comp,
+        n_clusters = clust,
+        silhouette_score = mean_sil,
+        silhouette_sd = sd_sil
+      ))
+      
+      print(paste("    Silhouette score:", round(mean_sil, 4),
+                  "  SD:", round(sd_sil, 4)))
+    }
+  }
+  
+  results$nmi_countland <- nmi_countland
+  
+  print(paste("   nmi_countland :", round(mean_sil, 4)))
+  
+  # Find the top 10 parameter combinations
+  top_results <- results %>%
+    arrange(desc(silhouette_score)) %>%
+    head(10)
+  
+  # Create a heatmap visualization of the silhouette scores
+  heatmap_mean <- ggplot(results, aes(x = n_components, y = n_clusters, fill = silhouette_score)) +
+    geom_tile() +
+    scale_fill_gradient(low = "blue", high = "red") +
+    labs(title = "Countland Mean Silhouette Scores",
+         x = "Number of Components",
+         y = "Number of Clusters") +
+    theme_minimal()
+  
+  # Create a heatmap visualization of the standard deviations
+  heatmap_sd <- ggplot(results, aes(x = n_components, y = n_clusters, fill = silhouette_sd)) +
+    geom_tile() +
+    scale_fill_gradient(low = "green", high = "purple") +
+    labs(title = "Countland Silhouette Score Standard Deviations",
+         x = "Number of Components",
+         y = "Number of Clusters") +
+    theme_minimal()
+  
+  # Create a combined visualization showing mean with SD as error bars
+  combined_plot <- results %>%
+    ggplot(aes(x = as.factor(n_components), y = silhouette_score, fill = as.factor(n_clusters))) +
+    geom_bar(stat = "identity", position = "dodge") +
+    geom_errorbar(aes(ymin = silhouette_score - silhouette_sd, 
+                      ymax = silhouette_score + silhouette_sd),
+                  position = position_dodge(0.9), width = 0.25) +
+    labs(title = "Silhouette Scores with Standard Deviation",
+         x = "Number of Components",
+         y = "Silhouette Score",
+         fill = "Number of Clusters") +
+    theme_minimal()
+  
+  
+  # Return the results
+  return(list(
+    all_results = results,
+    top_results = top_results,
+    heatmap_mean = heatmap_mean,
+    heatmap_sd = heatmap_sd,
+    combined_plot = combined_plot
+  ))
+}
+
+
+```
+
+
+
+```{r}
+# Example usage:
+countland_test <- test_countland_parameters(gold_data)
+
+```
+
+
+```{r}
+View(countland_test$all_results)
+View(countland_test$top_results)
+
+```
+
+
+```{r}
+countland_test$heatmap_mean
+countland_test$heatmap_sd
+countland_test$combined_plot
+```
